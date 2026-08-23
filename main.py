@@ -425,12 +425,15 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("❌ Викторина не найдена. Попробуй /quiz заново")
         return
     
-    # === ЗАЩИТА: ЕСЛИ ЧУЖОЙ — МОЛЧА ИГНОРИРУЕМ ===
+    # === ЕСЛИ ЧУЖОЙ НАЖАЛ — ОТДЕЛЬНОЕ СООБЩЕНИЕ ===
     if q.get("user_id") != user_id:
-        await query.answer("⛔ Это не твоя викторина!", show_alert=True)
-        return  # ← ВЫХОДИМ, НЕ УДАЛЯЯ ВОПРОС
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⛔ Аттатата! Это не твой квиз, проказник! 😡"
+        )
+        return  # Выходим, не трогая вопрос
     
-    # === ДАЛЬШЕ ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА ВОПРОСА ===
+    # === ДАЛЬШЕ ДЛЯ ВЛАДЕЛЬЦА ===
     selected = int(query.data.split("_")[-1])
     correct = q["correct_option_id"]
     reward = q.get("reward", 1)
@@ -470,7 +473,6 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="Markdown"
         )
     
-    # Удаляем вопрос только после того, как ВЛАДЕЛЕЦ ответил
     del context.user_data['quiz_question']
 # ===== СТАТИСТИКА =====
 @antispam_decorator
