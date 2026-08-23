@@ -295,45 +295,28 @@ def antispam_decorator(func):
         return await func(update, context)
     return wrapper
 
-from telegram.ext import CommandHandler
-import re
 
-# ===== RP-СИСТЕМА (ЧЕРЕЗ КОМАНДЫ) =====
-RP_DATA = {
-    "чай": [
+# Словарь с триггерами и ответами
+RP_TRIGGERS = {
+    "чай джейса": [
         "{user} умер от переизбытка маны ☠️",
-        "{user} выпил чай Джейса и почувствовал прилив сил! 🧙",
-        "Чай Джейса оказался слишком крепким... {user} уснул на 3 дня 😴"
+        "{user} выпил чай Джейса и почувствовал прилив сил! 🧙"
     ],
-    "книга": [
-        "{user} открыл книгу и прочитал запретное заклинание 🧙",
-        "Книга оказалась пустой... или это магия? 🤔",
-        "{user} нашёл в книге карту сокровищ! 🗺️"
-    ],
-    "лис": [
-        "Лис посмотрел на {user} и сказал: 'Ты ещё не готов' 🦊",
-        "{user} долго беседовал с Лисом о жизни... и получил +1 к мудрости",
-        "Лис дал {user} совет, который изменит всё... но ты его не запомнил"
+    "взять книгу": [
+        "{user} открыл книгу и прочитал запретное заклинание 🧙"
     ]
 }
 
-async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("📝 Напиши: !чай, !книга, !лис")
-        return
-    
-    keyword = " ".join(context.args).lower()
+# Обработчик сообщений
+async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
-    
-    for key, responses in RP_DATA.items():
-        if key in keyword:
-            response = random.choice(responses)
-            response = response.replace("{user}", user_name)
-            await update.message.reply_text(response)
-            return
-    
-    await update.message.reply_text("❌ Не нашёл такой RP-фразы")
 
+    for trigger, responses in RP_TRIGGERS.items():
+        if trigger in text:  # если триггер есть в сообщении
+            reply = random.choice(responses).replace("{user}", user_name)
+            await update.message.reply_text(reply)
+            return  # выходим, чтобы не обрабатывать дальше
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -1460,9 +1443,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editrebus", editrebus))
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
-    app.add_handler(CommandHandler("чай", rp_command))
-    app.add_handler(CommandHandler("книга", rp_command))
-    app.add_handler(CommandHandler("лис", rp_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rp))
 
     print("✅ Бот запущен!")
     app.run_polling()
