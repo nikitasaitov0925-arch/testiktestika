@@ -1579,7 +1579,7 @@ async def rplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     all_commands = []
     for trigger, data in RP_TRIGGERS.items():
         rp_type = data.get("type", "self")
-        label = "🧑" if rp_type == "self" else "👥"
+        label = "👤" if rp_type == "self" else "👥"
         all_commands.append(f"{label} `{trigger}`")
     
     # Сохраняем в context для пагинации
@@ -1592,7 +1592,7 @@ async def rplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start = page * page_size
     end = min(start + page_size, len(all_commands))
     
-    message = f"📋 *RP-команды (стр. {page + 1}/{total_pages})*\n\n"
+    message = f"📋 *RP-команды (👤 - личная команда, 👥 - интерактивная команда)  (стр. {page + 1}/{total_pages})*\n\n"
     message += "\n".join(all_commands[start:end])
     message += "\n\n📝 `/rp текст` — использовать команду"
     
