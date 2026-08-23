@@ -303,24 +303,6 @@ def load_rp_responses():
     with open('rp_responses.json', 'r', encoding='utf-8') as f:
         return json.load(f)
 
-import re
-from telegram.ext import MessageHandler, filters
-
-async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 handle_rp ВЫЗВАНА через Regex!")
-    text = update.message.text.strip().lower()
-    user_name = update.effective_user.first_name
-    
-    rp_data = load_rp_responses()
-    for keyword, responses in rp_data.items():
-        if re.search(r'\b' + re.escape(keyword) + r'\b', text):
-            response = random.choice(responses)
-            response = response.replace("Пользователь А", user_name)
-            await update.message.reply_text(response)
-            return
-
-# Регистрируем с фильтром Regex
-
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -877,6 +859,17 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== ОБРАБОТЧИКИ ТЕКСТА И ДОКУМЕНТОВ =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+     # ===== СНАЧАЛА ПРОВЕРЯЕМ RP =====
+    text = update.message.text.strip().lower()
+    user_name = update.effective_user.first_name
+    
+    rp_data = load_rp_responses()
+    for keyword, responses in rp_data.items():
+        if keyword in text:
+            response = random.choice(responses)
+            response = response.replace("Пользователь А", user_name)
+            await update.message.reply_text(response)
+            return  # <- ВЫХОДИМ, ЧТОБЫ НЕ ШЁЛ ДАЛЬШЕ
     step = context.user_data.get('step')
 
     # --- Сначала проверяем, не ответ ли на ребус ---
@@ -1427,7 +1420,6 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editrebus", editrebus))
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
-    app.add_handler(MessageHandler(filters.Regex(r'.*'), handle_rp))
 
     print("✅ Бот запущен!")
     app.run_polling()
