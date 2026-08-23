@@ -1406,29 +1406,24 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.remove(file_path)
 
 async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 rp_command ВЫЗВАНА")  # ← ДИАГНОСТИКА
+    print(f"📦 RP_TRIGGERS: {RP_TRIGGERS}")  # ← ЧТО В СЛОВАРЕ
+    
     if not context.args:
-        await update.message.reply_text(
-            "📝 *Как использовать:*\n"
-            "`/rp текст`\n"
-            "`/rp текст @username` — взаимодействие с другим пользователем",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("📝 /rp текст")
         return
     
-    full_text = " ".join(context.args)
+    full_text = " ".join(context.args).lower()
+    print(f"📩 Текст: {full_text}")  # ← ЧТО ПРИШЛО
+    
     user_name = update.effective_user.first_name
     target_name = None
     
-    # Проверяем, есть ли упоминание @username
     import re
     mention_match = re.search(r'@(\w+)', full_text)
     if mention_match:
         target_username = mention_match.group(1)
-        # Пытаемся получить имя пользователя по username
         try:
-            # Ищем в базе или через Telegram API
-            target_user = None
-            # Сначала ищем в базе users по username (если есть)
             conn = sqlite3.connect(USERS_DB)
             c = conn.cursor()
             c.execute('SELECT first_name FROM users WHERE username LIKE ?', (f'%{target_username}%',))
@@ -1437,27 +1432,45 @@ async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if row:
                 target_name = row[0]
             else:
-                # Если в базе нет — просто показываем @username
                 target_name = f"@{target_username}"
         except:
             target_name = f"@{target_username}"
     
-    # Убираем @username из текста для поиска триггера
-    clean_text = re.sub(r'@\w+', '', full_text).strip().lower()
+    if not target_name and update.message.reply_to_message:
+        target_user = update.message.reply_to_message.from_user
+        target_name = target_user.first_name or target_user.username or "Кто-то"
+    
+    clean_text = re.sub(r'@\w+', '', full_text).strip()
     if not clean_text:
-        clean_text = full_text.lower()
+        clean_text = full_text
     
-    user_name_full = update.effective_user.first_name
+    print(f"🔎 Чистый текст: {clean_text}")  # ← ЧТО ИЩЕМ
     
-    for trigger, responses in RP_TRIGGERS.items():
+    for trigger, data in RP_TRIGGERS.items():
+        print(f"🔍 Проверяю: '{trigger}' в '{clean_text}'")  # ← ПОИСК
         if trigger in clean_text:
-            reply = random.choice(responses)
-            reply = reply.replace("{user}", user_name_full)
-            if target_name:
-                reply = reply.replace("{target}", target_name)
-            await update.message.reply_text(reply)
-            return
+            print(f"✅ Найдено: {trigger}")  # ← ЕСЛИ НАШЛО
+            rp_type = data.get("type", "self")
+            responses = data["responses"]
+            
+            if rp_type == "self":
+                reply = random.choice(responses).replace("{user}", user_name)
+                reply = reply.replace("{target}", "никого")
+                await update.message.reply_text(reply)
+                return
+            
+            if rp_type == "target":
+                if not target_name:
+                    await update.message.reply_text(
+                        "❌ Для этого действия нужен второй пользователь.\n"
+                        "Укажи @username или ответь на сообщение."
+                    )
+                    return
+                reply = random.choice(responses).replace("{user}", user_name).replace("{target}", target_name)
+                await update.message.reply_text(reply)
+                return
     
+    print("❌ Ничего не найдено")  # ← ЕСЛИ НЕ НАШЛО
     await update.message.reply_text("❌ Не нашёл такой RP-фразы")
 
 # ===== ЗАПУСК =====
