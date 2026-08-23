@@ -296,26 +296,17 @@ def antispam_decorator(func):
     return wrapper
 
 RP_TRIGGERS = {
-    "Выпить чай джейса": [
+    "Чай Джейса": [
         "{user} умер от переизбытка маны ☠️",
         "{user} выпил чай Джейса и почувствовал прилив сил! 🧙"
     ],
-    "Прочесть дневник Джодаха": [
-        "{user} наполнился мудростью величайшего мага Даливарики 🧙"
-    ],
-    "Поговорить с Лисом": [
-        "Лис посмотрел на {user} и сказал: 'Ты ещё не готов...' 🦊",
-        "{user} долго беседовал с Лисом о жизни... и получил +1 к мудрости"
+    "Пузатый Лис": [
+        "{user} выпил одуванчиковое пиво вместе с {target} 🍺",
+        "{user} и {target} устроили пивную дуэль! 🍻"
     ],
     "обнять": [
-        "{user} обнял тебя 🤗",
-        "{user} крепко обнял!",
-        "От объятий {user} стало теплее на душе ❤️"
-    ],
-    "ударить": [
-        "{user} ударил и промахнулся 😂",
-        "{user} нанёс сокрушительный удар! 💥",
-        "{user} ударил, но противник даже не заметил 😅"
+        "{user} обнял {target} 🤗",
+        "{user} крепко обнял {target}! ❤️"
     ]
 }
 
@@ -1400,21 +1391,58 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("📝 /rp текст")
+        await update.message.reply_text(
+            "📝 *Как использовать:*\n"
+            "`/rp текст`\n"
+            "`/rp текст @username` — взаимодействие с другим пользователем",
+            parse_mode="Markdown"
+        )
         return
     
-    text = " ".join(context.args).lower()
+    full_text = " ".join(context.args)
     user_name = update.effective_user.first_name
+    target_name = None
+    
+    # Проверяем, есть ли упоминание @username
+    import re
+    mention_match = re.search(r'@(\w+)', full_text)
+    if mention_match:
+        target_username = mention_match.group(1)
+        # Пытаемся получить имя пользователя по username
+        try:
+            # Ищем в базе или через Telegram API
+            target_user = None
+            # Сначала ищем в базе users по username (если есть)
+            conn = sqlite3.connect(USERS_DB)
+            c = conn.cursor()
+            c.execute('SELECT first_name FROM users WHERE username LIKE ?', (f'%{target_username}%',))
+            row = c.fetchone()
+            conn.close()
+            if row:
+                target_name = row[0]
+            else:
+                # Если в базе нет — просто показываем @username
+                target_name = f"@{target_username}"
+        except:
+            target_name = f"@{target_username}"
+    
+    # Убираем @username из текста для поиска триггера
+    clean_text = re.sub(r'@\w+', '', full_text).strip().lower()
+    if not clean_text:
+        clean_text = full_text.lower()
+    
+    user_name_full = update.effective_user.first_name
     
     for trigger, responses in RP_TRIGGERS.items():
-        keywords = trigger.split('|')
-        if any(kw in text for kw in keywords):
-            reply = random.choice(responses).replace("{user}", user_name)
+        if trigger in clean_text:
+            reply = random.choice(responses)
+            reply = reply.replace("{user}", user_name_full)
+            if target_name:
+                reply = reply.replace("{target}", target_name)
             await update.message.reply_text(reply)
             return
     
     await update.message.reply_text("❌ Не нашёл такой RP-фразы")
-
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
