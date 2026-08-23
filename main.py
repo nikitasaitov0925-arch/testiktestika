@@ -303,26 +303,23 @@ def load_rp_responses():
     with open('rp_responses.json', 'r', encoding='utf-8') as f:
         return json.load(f)
 
+import re
+from telegram.ext import MessageHandler, filters
+
 async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 handle_rp ВЫЗВАНА!")
+    print("🔥 handle_rp ВЫЗВАНА через Regex!")
     text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
     
-    print(f"🔍 Получен текст: {text}")  # ← ДОБАВЬ
-    
     rp_data = load_rp_responses()
-    print(f"📦 Загружено RP-фраз: {len(rp_data)}")  # ← ДОБАВЬ
-    
     for keyword, responses in rp_data.items():
-        print(f"🔎 Проверяю: '{keyword}' в '{text}'")  # ← ДОБАВЬ
-        if keyword in text:
+        if re.search(r'\b' + re.escape(keyword) + r'\b', text):
             response = random.choice(responses)
             response = response.replace("Пользователь А", user_name)
             await update.message.reply_text(response)
-            print(f"✅ ОТВЕТ ОТПРАВЛЕН: {response}")  # ← ДОБАВЬ
             return
-    
-    print("❌ Ничего не найдено, молчу")  # ← ДОБАВЬ
+
+# Регистрируем с фильтром Regex
 
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1430,7 +1427,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editrebus", editrebus))
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rp))
+    app.add_handler(MessageHandler(filters.Regex(r'.*'), handle_rp))
 
     print("✅ Бот запущен!")
     app.run_polling()
