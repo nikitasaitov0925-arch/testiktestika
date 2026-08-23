@@ -859,21 +859,21 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== ОБРАБОТЧИКИ ТЕКСТА И ДОКУМЕНТОВ =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rp_data = load_rp_responses()
-    print(f"📦 Содержимое rp_data: {rp_data}")  # ← ПОКАЖЕТ ВСЁ СОДЕРЖИМОЕ
+   
      # ===== СНАЧАЛА ПРОВЕРЯЕМ RP =====
     text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
     
+    # === ЗАГРУЖАЕМ ОДИН РАЗ ===
     rp_data = load_rp_responses()
+    
     for keyword, responses in rp_data.items():
         if keyword in text:
             response = random.choice(responses)
-            response = response.replace("{user}", user_name) 
+            response = response.replace("{user}", user_name)
             await update.message.reply_text(response)
-            return  # <- ВЫХОДИМ, ЧТОБЫ НЕ ШЁЛ ДАЛЬШЕ
-    step = context.user_data.get('step')
-
+            return
+    
     # --- Сначала проверяем, не ответ ли на ребус ---
     user_id = update.effective_user.id
     if user_id in active_rebuses:
