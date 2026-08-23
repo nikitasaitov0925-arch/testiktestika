@@ -1410,6 +1410,29 @@ async def handle_group_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(reply)
             return
 
+@antispam_decorator
+async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "📝 *Как использовать:*\n"
+            "`/rp текст`\n\n"
+            "Пример: `/rp выпить чай Джейса`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Склеиваем все аргументы в одну строку
+    text = " ".join(context.args).lower()
+    user_name = update.effective_user.first_name
+    
+    for trigger, responses in RP_TRIGGERS.items():
+        if trigger in text:
+            reply = random.choice(responses).replace("{user}", user_name)
+            await update.message.reply_text(reply)
+            return
+    
+    await update.message.reply_text("❌ Не нашёл такой RP-фразы. Проверь написание.")
+
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
@@ -1444,8 +1467,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editrebus", editrebus))
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rp))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_group_text))
+    app.add_handler(CommandHandler("rp", rp_command))
 
     print("✅ Бот запущен!")
     app.run_polling()
