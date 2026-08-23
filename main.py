@@ -422,16 +422,16 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     q = context.user_data.get('quiz_question')
     if not q:
-        await query.edit_message_text("❌ Викторина не найдена. Попробуй /quiz заново")
+        # Если вопроса нет — просто игнорируем, ничего не меняем
         return
     
-    # === ЕСЛИ ЧУЖОЙ НАЖАЛ — ОТДЕЛЬНОЕ СООБЩЕНИЕ ===
+    # === ЕСЛИ ЧУЖОЙ НАЖАЛ ===
     if q.get("user_id") != user_id:
         await context.bot.send_message(
             chat_id=user_id,
             text="⛔ Аттатата! Это не твой квиз, проказник! 😡"
         )
-        return  # Выходим, не трогая вопрос
+        return  # Выходим, НЕ ТРОГАЕМ СООБЩЕНИЕ
     
     # === ДАЛЬШЕ ДЛЯ ВЛАДЕЛЬЦА ===
     selected = int(query.data.split("_")[-1])
