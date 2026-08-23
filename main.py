@@ -1473,6 +1473,42 @@ async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("❌ Ничего не найдено")  # ← ЕСЛИ НЕ НАШЛО
     await update.message.reply_text("❌ Не нашёл такой RP-фразы")
 
+@antispam_decorator
+async def rplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not RP_TRIGGERS:
+        await update.message.reply_text("📭 Список RP-команд пуст.")
+        return
+    
+    # Сортируем по типу
+    self_commands = []
+    target_commands = []
+    
+    for trigger, data in RP_TRIGGERS.items():
+        rp_type = data.get("type", "self")
+        if rp_type == "self":
+            self_commands.append(trigger)
+        else:
+            target_commands.append(trigger)
+    
+    message = "📋 *Доступные RP-команды:*\n\n"
+    
+    if self_commands:
+        message += "🧑 *Личные (для себя):*\n"
+        for cmd in self_commands:
+            message += f"  • `{cmd}`\n"
+    
+    if target_commands:
+        message += "\n👥 *Интерактивные (с другим пользователем):*\n"
+        for cmd in target_commands:
+            message += f"  • `{cmd}` (укажи @username или ответь на сообщение)\n"
+    
+    message += "\n📝 *Как использовать:*\n"
+    message += "`/rp текст` — личное действие\n"
+    message += "`/rp текст @username` — действие с другим\n"
+    message += "`/rp текст` (в ответ на сообщение) — действие с автором"
+    
+    await update.message.reply_text(message, parse_mode="Markdown")
+
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
     init_user_db()
@@ -1507,6 +1543,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
     app.add_handler(CommandHandler("rp", rp_command))
+    app.add_handler(CommandHandler("rplist", rplist))
 
     print("✅ Бот запущен!")
     app.run_polling()
