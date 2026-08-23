@@ -304,6 +304,7 @@ def load_rp_responses():
         return json.load(f)
 
 async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 handle_rp ВЫЗВАНА!")
     text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
     
