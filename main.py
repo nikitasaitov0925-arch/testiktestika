@@ -295,28 +295,31 @@ def antispam_decorator(func):
         return await func(update, context)
     return wrapper
 
-
-# Словарь с триггерами и ответами
 RP_TRIGGERS = {
     "чай джейса": [
         "{user} умер от переизбытка маны ☠️",
         "{user} выпил чай Джейса и почувствовал прилив сил! 🧙"
     ],
     "взять книгу": [
-        "{user} открыл книгу и прочитал запретное заклинание 🧙"
+        "{user} открыл книгу и прочитал запретное заклинание 🧙",
+        "{user} нашёл в книге карту сокровищ! 🗺️"
+    ],
+    "поговорить с лисом": [
+        "Лис посмотрел на {user} и сказал: 'Ты ещё не готов' 🦊",
+        "{user} долго беседовал с Лисом о жизни... и получил +1 к мудрости"
+    ],
+    "обнять": [
+        "{user} обнял тебя 🤗",
+        "{user} крепко обнял!",
+        "От объятий {user} стало теплее на душе ❤️"
+    ],
+    "ударить": [
+        "{user} ударил и промахнулся 😂",
+        "{user} нанёс сокрушительный удар! 💥",
+        "{user} ударил, но противник даже не заметил 😅"
     ]
 }
 
-# Обработчик сообщений
-async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().lower()
-    user_name = update.effective_user.first_name
-
-    for trigger, responses in RP_TRIGGERS.items():
-        if trigger in text:  # если триггер есть в сообщении
-            reply = random.choice(responses).replace("{user}", user_name)
-            await update.message.reply_text(reply)
-            return  # выходим, чтобы не обрабатывать дальше
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -1396,42 +1399,22 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-async def handle_group_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Проверяем, что это группа, а не личка
-    if update.effective_chat.type not in ["group", "supergroup"]:
-        return
-
-    text = update.message.text.strip().lower()
-    user_name = update.effective_user.first_name or "Кто-то"
-
-    for trigger, responses in RP_TRIGGERS.items():
-        if trigger in text:
-            reply = random.choice(responses).replace("{user}", user_name)
-            await update.message.reply_text(reply)
-            return
-
-@antispam_decorator
 async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text(
-            "📝 *Как использовать:*\n"
-            "`/rp текст`\n\n"
-            "Пример: `/rp выпить чай Джейса`",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("📝 /rp текст")
         return
     
-    # Склеиваем все аргументы в одну строку
     text = " ".join(context.args).lower()
     user_name = update.effective_user.first_name
     
     for trigger, responses in RP_TRIGGERS.items():
-        if trigger in text:
+        keywords = trigger.split('|')
+        if any(kw in text for kw in keywords):
             reply = random.choice(responses).replace("{user}", user_name)
             await update.message.reply_text(reply)
             return
     
-    await update.message.reply_text("❌ Не нашёл такой RP-фразы. Проверь написание.")
+    await update.message.reply_text("❌ Не нашёл такой RP-фразы")
 
 
 # ===== ЗАПУСК =====
