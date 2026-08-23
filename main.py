@@ -873,28 +873,15 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== ОБРАБОТЧИКИ ТЕКСТА И ДОКУМЕНТОВ =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 handle_message ВЫЗВАНА")
-    
-    if not update.message or not update.message.text:
-        print("❌ Нет текста")
-        return
-    
+     # === RP-ПРОВЕРКА (ПЕРВОЙ) ===
     text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
-    
-    print(f"📩 Текст: '{text}'")
-    print(f"🔍 RP_DATA: {list(RP_DATA.keys())}")
-    
-    for keyword, responses in RP_DATA.items():
-        print(f"🔎 Проверяю: '{keyword}' в '{text}'")
-        if keyword in text:
-            print("✅ НАШЛО!")
-            response = random.choice(responses)
-            response = response.replace("{user}", user_name)
-            await update.message.reply_text(response)
+
+    for trigger, responses in RP_TRIGGERS.items():
+        if trigger in text:
+            reply = random.choice(responses).replace("{user}", user_name)
+            await update.message.reply_text(reply)
             return
-    
-    print("❌ Ничего не найдено")
     # --- Сначала проверяем, не ответ ли на ребус ---
     user_id = update.effective_user.id
     if user_id in active_rebuses:
