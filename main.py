@@ -878,7 +878,7 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== ОБРАБОТЧИКИ ТЕКСТА И ДОКУМЕНТОВ =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-     print("🔥 handle_message ВЫЗВАНА")
+    print("🔥 handle_message ВЫЗВАНА")
     
     if not update.message or not update.message.text:
         print("❌ Нет текста")
@@ -900,7 +900,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     
     print("❌ Ничего не найдено")
-    
     # --- Сначала проверяем, не ответ ли на ребус ---
     user_id = update.effective_user.id
     if user_id in active_rebuses:
