@@ -63,6 +63,25 @@ RANKS = [
     {"name": "Сценарист ST", "min_score": 500, "emoji": "📖"},
 ]
 
+# ===== RP-СИСТЕМА (ВСТРОЕННАЯ) =====
+RP_DATA = {
+    "чай джейса": [
+        "{user} умер от переизбытка маны ☠️",
+        "{user} выпил чай Джейса и почувствовал прилив сил! 🧙",
+        "Чай Джейса оказался слишком крепким... {user} уснул на 3 дня 😴"
+    ],
+    "взять книгу": [
+        "{user} открыл книгу и прочитал запретное заклинание 🧙",
+        "Книга оказалась пустой... или это магия? 🤔",
+        "{user} нашёл в книге карту сокровищ! 🗺️"
+    ],
+    "поговорить с лисом": [
+        "Лис посмотрел на {user} и сказал: 'Ты ещё не готов' 🦊",
+        "{user} долго беседовал с Лисом о жизни... и получил +1 к мудрости",
+        "Лис дал {user} совет, который изменит всё... но ты его не запомнил"
+    ]
+}
+
 def get_rank(score):
     for rank in reversed(RANKS):
         if score >= rank["min_score"]:
@@ -859,15 +878,10 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== ОБРАБОТЧИКИ ТЕКСТА И ДОКУМЕНТОВ =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-   
-     # ===== СНАЧАЛА ПРОВЕРЯЕМ RP =====
     text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
-    
-    # === ЗАГРУЖАЕМ ОДИН РАЗ ===
-    rp_data = load_rp_responses()
-    
-    for keyword, responses in rp_data.items():
+
+    for keyword, responses in RP_DATA.items():
         if keyword in text:
             response = random.choice(responses)
             response = response.replace("{user}", user_name)
