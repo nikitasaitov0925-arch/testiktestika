@@ -361,12 +361,17 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ты уже прошёл 5 викторин сегодня! Возвращайся завтра.")
         return
     
-    # === БЛОКИРУЕМ НОВЫЙ ВЫЗОВ, ПОКА НЕ ОТВЕЧЕН СТАРЫЙ ВОПРОС ===
-    if context.user_data.get('quiz_question'):
+    # Проверяем, есть ли активный вопрос У ЭТОГО ПОЛЬЗОВАТЕЛЯ
+    active = context.user_data.get('quiz_question')
+    if active and active.get("user_id") == user_id:
         await update.message.reply_text("❌ У тебя уже есть активный вопрос! Ответь на него, чтобы получить новый.")
         return
     
-    # === ЗАСЧИТЫВАЕМ ПОПЫТКУ ===
+    # Если активный вопрос от другого пользователя — игнорируем
+    if active and active.get("user_id") != user_id:
+        # Не блокируем, просто продолжаем
+        pass
+    
     stats["today_plays"] += 1
     update_user_stats(user_id, stats["score"], stats["today_plays"], today)
     
@@ -380,6 +385,7 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reward = RARITY_REWARDS.get(rarity, 1)
     
     quiz_data = {
+        "user_id": user_id,
         "question_id": question_id,
         "question": question,
         "options": options,
@@ -391,7 +397,8 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = []
     for i, opt in enumerate(options):
-        keyboard.append([InlineKeyboardButton(opt, callback_data=f"quiz_ans_{i}")])
+        button_text = opt[:35] + "…" if len(opt) > 35 else opt
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"quiz_ans_{i}")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     rank = get_rank(stats["score"])
@@ -416,6 +423,11 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     q = context.user_data.get('quiz_question')
     if not q:
         await query.edit_message_text("❌ Викторина не найдена. Попробуй /quiz заново")
+        return
+    
+    # === ЗАЩИТА ОТ ЧУЖИХ НАЖАТИЙ ===
+    if q.get("user_id") != user_id:
+        await query.answer("⛔ Это не твоя викторина!", show_alert=True)
         return
     
     selected = int(query.data.split("_")[-1])
