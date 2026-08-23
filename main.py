@@ -867,7 +867,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for keyword, responses in rp_data.items():
         if keyword in text:
             response = random.choice(responses)
-            response = response.replace("Пользователь А", user_name)
+            response = response.replace("{user}", user_name) 
             await update.message.reply_text(response)
             return  # <- ВЫХОДИМ, ЧТОБЫ НЕ ШЁЛ ДАЛЬШЕ
     step = context.user_data.get('step')
