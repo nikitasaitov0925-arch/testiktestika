@@ -1367,6 +1367,21 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path):
             os.remove(file_path)
 
+async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().lower()
+    user_name = update.effective_user.first_name
+    
+    rp_data = load_rp_responses()
+    
+    for keyword, responses in rp_data.items():
+        if keyword in text:
+            response = random.choice(responses)
+            response = response.replace("Пользователь А", user_name)
+            await update.message.reply_text(response)
+            return
+    
+    # Если ничего не подошло — просто игнорируем
+
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
     init_user_db()
@@ -1400,6 +1415,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editrebus", editrebus))
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rp))
 
     print("✅ Бот запущен!")
     app.run_polling()
