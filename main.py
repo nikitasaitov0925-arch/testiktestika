@@ -1511,35 +1511,84 @@ async def rplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 Список RP-команд пуст.")
         return
     
-    # Сортируем по типу
-    self_commands = []
-    target_commands = []
-    
+    # Формируем список всех команд с типами
+    all_commands = []
     for trigger, data in RP_TRIGGERS.items():
         rp_type = data.get("type", "self")
-        if rp_type == "self":
-            self_commands.append(trigger)
-        else:
-            target_commands.append(trigger)
+        label = "🧑" if rp_type == "self" else "👥"
+        all_commands.append(f"{label} `{trigger}`")
     
-    message = "📋 *Доступные RP-команды:*\n\n"
+    # Сохраняем в context для пагинации
+    context.user_data['rp_list'] = all_commands
     
-    if self_commands:
-        message += "🧑 *Личные (для себя):*\n"
-        for cmd in self_commands:
-            message += f"  • `{cmd}`\n"
+    page_size = 10
+    total_pages = (len(all_commands) + page_size - 1) // page_size
+    page = 0
     
-    if target_commands:
-        message += "\n👥 *Интерактивные (с другим пользователем):*\n"
-        for cmd in target_commands:
-            message += f"  • `{cmd}` (укажи @username или ответь на сообщение)\n"
+    start = page * page_size
+    end = min(start + page_size, len(all_commands))
     
-    message += "\n📝 *Как использовать:*\n"
-    message += "`/rp текст` — личное действие\n"
-    message += "`/rp текст @username` — действие с другим\n"
-    message += "`/rp текст` (в ответ на сообщение) — действие с автором"
+    message = f"📋 *RP-команды (стр. {page + 1}/{total_pages})*\n\n"
+    message += "\n".join(all_commands[start:end])
+    message += "\n\n📝 `/rp текст` — использовать команду"
     
-    await update.message.reply_text(message, parse_mode="Markdown")
+    keyboard = []
+    nav_row = []
+    if total_pages > 1:
+        if page > 0:
+            nav_row.append(InlineKeyboardButton("◀️ Назад", callback_data=f"rplist_{page - 1}"))
+        if page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"rplist_{page + 1}"))
+        if nav_row:
+            keyboard.append(nav_row)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    await update.message.reply_text(message, parse_mode="Markdown", reply_markup=reply_markup)
+
+async def rplist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    page = int(query.data.split("_")[1])
+    
+    # Берём список из context
+    all_commands = context.user_data.get('rp_list', [])
+    if not all_commands:
+        # Если список потерялся — пересобираем
+        for trigger, data in RP_TRIGGERS.items():
+            rp_type = data.get("type", "self")
+            label = "🧑" if rp_type == "self" else "👥"
+            all_commands.append(f"{label} `{trigger}`")
+        context.user_data['rp_list'] = all_commands
+    
+    page_size = 10
+    total_pages = (len(all_commands) + page_size - 1) // page_size
+    
+    if page < 0:
+        page = 0
+    if page >= total_pages:
+        page = total_pages - 1
+    
+    start = page * page_size
+    end = min(start + page_size, len(all_commands))
+    
+    message = f"📋 *RP-команды (стр. {page + 1}/{total_pages})*\n\n"
+    message += "\n".join(all_commands[start:end])
+    message += "\n\n📝 `/rp текст` — использовать команду"
+    
+    keyboard = []
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("◀️ Назад", callback_data=f"rplist_{page - 1}"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"rplist_{page + 1}"))
+    if nav_row:
+        keyboard.append(nav_row)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    await query.edit_message_text(message, parse_mode="Markdown", reply_markup=reply_markup)
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
@@ -1576,6 +1625,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
     app.add_handler(CommandHandler("rp", rp_command))
     app.add_handler(CommandHandler("rplist", rplist))
+    app.add_handler(CallbackQueryHandler(rplist_callback, pattern="rplist_"))
 
     print("✅ Бот запущен!")
     app.run_polling()
