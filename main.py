@@ -1396,6 +1396,20 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path):
             os.remove(file_path)
 
+async def handle_group_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем, что это группа, а не личка
+    if update.effective_chat.type not in ["group", "supergroup"]:
+        return
+
+    text = update.message.text.strip().lower()
+    user_name = update.effective_user.first_name or "Кто-то"
+
+    for trigger, responses in RP_TRIGGERS.items():
+        if trigger in text:
+            reply = random.choice(responses).replace("{user}", user_name)
+            await update.message.reply_text(reply)
+            return
+
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
@@ -1431,6 +1445,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rp))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_group_text))
 
     print("✅ Бот запущен!")
     app.run_polling()
