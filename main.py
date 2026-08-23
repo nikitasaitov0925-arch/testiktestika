@@ -63,25 +63,6 @@ RANKS = [
     {"name": "Сценарист ST", "min_score": 500, "emoji": "📖"},
 ]
 
-# ===== RP-СИСТЕМА (ВСТРОЕННАЯ) =====
-RP_DATA = {
-    "чай джейса": [
-        "{user} умер от переизбытка маны ☠️",
-        "{user} выпил чай Джейса и почувствовал прилив сил! 🧙",
-        "Чай Джейса оказался слишком крепким... {user} уснул на 3 дня 😴"
-    ],
-    "взять книгу": [
-        "{user} открыл книгу и прочитал запретное заклинание 🧙",
-        "Книга оказалась пустой... или это магия? 🤔",
-        "{user} нашёл в книге карту сокровищ! 🗺️"
-    ],
-    "поговорить с лисом": [
-        "Лис посмотрел на {user} и сказал: 'Ты ещё не готов' 🦊",
-        "{user} долго беседовал с Лисом о жизни... и получил +1 к мудрости",
-        "Лис дал {user} совет, который изменит всё... но ты его не запомнил"
-    ]
-}
-
 def get_rank(score):
     for rank in reversed(RANKS):
         if score >= rank["min_score"]:
@@ -314,13 +295,44 @@ def antispam_decorator(func):
         return await func(update, context)
     return wrapper
 
-# ===== RP-СИСТЕМА =====
-def load_rp_responses():
-    if not os.path.exists('rp_responses.json'):
-        print("❌ Файл rp_responses.json не найден")
-        return {}
-    with open('rp_responses.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+from telegram.ext import CommandHandler
+import re
+
+# ===== RP-СИСТЕМА (ЧЕРЕЗ КОМАНДЫ) =====
+RP_DATA = {
+    "чай": [
+        "{user} умер от переизбытка маны ☠️",
+        "{user} выпил чай Джейса и почувствовал прилив сил! 🧙",
+        "Чай Джейса оказался слишком крепким... {user} уснул на 3 дня 😴"
+    ],
+    "книга": [
+        "{user} открыл книгу и прочитал запретное заклинание 🧙",
+        "Книга оказалась пустой... или это магия? 🤔",
+        "{user} нашёл в книге карту сокровищ! 🗺️"
+    ],
+    "лис": [
+        "Лис посмотрел на {user} и сказал: 'Ты ещё не готов' 🦊",
+        "{user} долго беседовал с Лисом о жизни... и получил +1 к мудрости",
+        "Лис дал {user} совет, который изменит всё... но ты его не запомнил"
+    ]
+}
+
+async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("📝 Напиши: !чай, !книга, !лис")
+        return
+    
+    keyword = " ".join(context.args).lower()
+    user_name = update.effective_user.first_name
+    
+    for key, responses in RP_DATA.items():
+        if key in keyword:
+            response = random.choice(responses)
+            response = response.replace("{user}", user_name)
+            await update.message.reply_text(response)
+            return
+    
+    await update.message.reply_text("❌ Не нашёл такой RP-фразы")
 
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1448,6 +1460,9 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editrebus", editrebus))
     app.add_handler(CommandHandler("backup_rebus", backup_rebus))
     app.add_handler(CommandHandler("restore_rebus", restore_rebus))
+    app.add_handler(CommandHandler("чай", rp_command))
+    app.add_handler(CommandHandler("книга", rp_command))
+    app.add_handler(CommandHandler("лис", rp_command))
 
     print("✅ Бот запущен!")
     app.run_polling()
