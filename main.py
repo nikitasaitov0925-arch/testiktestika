@@ -295,6 +295,27 @@ def antispam_decorator(func):
         return await func(update, context)
     return wrapper
 
+# ===== RP-СИСТЕМА =====
+def load_rp_responses():
+    if not os.path.exists('rp_responses.json'):
+        print("❌ Файл rp_responses.json не найден")
+        return {}
+    with open('rp_responses.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().lower()
+    user_name = update.effective_user.first_name
+    
+    rp_data = load_rp_responses()
+    
+    for keyword, responses in rp_data.items():
+        if keyword in text:
+            response = random.choice(responses)
+            response = response.replace("Пользователь А", user_name)
+            await update.message.reply_text(response)
+            return
+
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -1367,20 +1388,6 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().lower()
-    user_name = update.effective_user.first_name
-    
-    rp_data = load_rp_responses()
-    
-    for keyword, responses in rp_data.items():
-        if keyword in text:
-            response = random.choice(responses)
-            response = response.replace("Пользователь А", user_name)
-            await update.message.reply_text(response)
-            return
-    
-    # Если ничего не подошло — просто игнорируем
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
