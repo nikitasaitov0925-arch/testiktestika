@@ -307,14 +307,21 @@ async def handle_rp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip().lower()
     user_name = update.effective_user.first_name
     
+    print(f"🔍 Получен текст: {text}")  # ← ДОБАВЬ
+    
     rp_data = load_rp_responses()
+    print(f"📦 Загружено RP-фраз: {len(rp_data)}")  # ← ДОБАВЬ
     
     for keyword, responses in rp_data.items():
+        print(f"🔎 Проверяю: '{keyword}' в '{text}'")  # ← ДОБАВЬ
         if keyword in text:
             response = random.choice(responses)
             response = response.replace("Пользователь А", user_name)
             await update.message.reply_text(response)
+            print(f"✅ ОТВЕТ ОТПРАВЛЕН: {response}")  # ← ДОБАВЬ
             return
+    
+    print("❌ Ничего не найдено, молчу")  # ← ДОБАВЬ
 
 # ===== КОМАНДЫ =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
