@@ -371,7 +371,7 @@ RP_TRIGGERS = {
             "{user} увидел(-а-) аномалию с Воплощёнными и закрылся(-ась-) в сонном измерении на месяц 🏠 ",
             "{user} увидел(-а-) аномалию с масками Первых и нахлынули старые воспоминания 🎭 ",
             "{user} увидел(-а-) аномалию с взломанным Г.Л.А.С и решил(-а-) что повременит с белым пространством ⬜️ ",
-            "{user} благодаря аномалии смог узнать имя другого существа и навалял(-а-) ему 🤩 ",
+            "{user} благодаря аномалии смог(-ла-) узнать имя другого существа и навалял(-а-) ему 🤩 ",
             "{user} услышал(-а-) от Риз очередную чересчур знакомую фразу, что же это может значить? 🤔",
             "{user} увидел(-а-) аномалию и переместился(-ась-) в белое пространство 👻 ",
             "{user} не увидел(-а-) никаких аномалий ☹️",
@@ -618,17 +618,12 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У тебя уже есть активный вопрос! Ответь на него, чтобы получить новый.")
         return
     
-    # Если активный вопрос от другого пользователя — игнорируем
-    if active and active.get("user_id") != user_id:
-        # Не блокируем, просто продолжаем
-        pass
-    
     stats["today_plays"] += 1
     update_user_stats(user_id, stats["score"], stats["today_plays"], today)
     
     row = get_random_question(user_id)
     if not row:
-        await update.message.reply_text("📭 В базе нет новых вопросов! Добавь через /basequiz")
+        await update.message.reply_text("❌ Сегодня ты прошёл все доступные викторины! Возвращайся завтра.")
         return
     
     question_id, question, options_raw, correct_option_id, rarity = row
@@ -646,15 +641,28 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     context.user_data['quiz_question'] = quiz_data
     
-    keyboard = []
+    # Формируем текст с вариантами
+    options_text = ""
     for i, opt in enumerate(options):
-        button_text = opt[:35] + "…" if len(opt) > 35 else opt
-        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"quiz_ans_{i}")])
+        options_text += f"{i+1}. {opt}\n"
+    
+    # Кнопки с цифрами (по 2 в ряд)
+    keyboard = []
+    row_buttons = []
+    for i in range(len(options)):
+        row_buttons.append(InlineKeyboardButton(str(i+1), callback_data=f"quiz_ans_{i}"))
+        if len(row_buttons) == 2:
+            keyboard.append(row_buttons)
+            row_buttons = []
+    if row_buttons:
+        keyboard.append(row_buttons)
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     rank = get_rank(stats["score"])
     await update.message.reply_text(
         f"❓ *{question}*\n\n"
+        f"{options_text}\n"
         f"{RARITY_EMOJIS.get(rarity, '')}\n"
         f"🎁 Награда: +{reward} баллов\n\n"
         f"🏆 Твои баллы: {stats['score']}\n"
@@ -1803,7 +1811,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("reset_top", reset_top))
     # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_rebus_answer))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(MessageHandler(filters.Document.TXT, handle_document))
     app.add_handler(CommandHandler("restore_top", restore_top))
     app.add_handler(CommandHandler("update_names", update_names))
     app.add_handler(CommandHandler("backup_quizzes", backup_quizzes))
