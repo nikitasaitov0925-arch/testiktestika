@@ -22,6 +22,7 @@ BASE_QUIZZES_DB = "/app/data/base_qu1zzes.db"
 USERS_DB = "/app/data/qu1z_users.db"
 
 active_rebuses = {}
+active_battles = {}
 
 # ===== РЕДКОСТИ =====
 RARITY_REWARDS = {
@@ -101,7 +102,15 @@ def init_base_quizzes_db():
                   options TEXT,
                   correct_option_id INTEGER,
                   rarity TEXT DEFAULT 'common',
+                  explanation TEXT DEFAULT '',
                   date TEXT)''')
+    
+    # Добавляем колонку, если база старая (на случай обновления)
+    c.execute("PRAGMA table_info(base_quizzes)")
+    columns = [col[1] for col in c.fetchall()]
+    if 'explanation' not in columns:
+        c.execute("ALTER TABLE base_quizzes ADD COLUMN explanation TEXT DEFAULT ''")
+    
     conn.commit()
     conn.close()
     print("✅ База вопросов инициализирована")
@@ -169,18 +178,18 @@ def get_random_question(user_id):
     if played_ids:
         placeholders = ','.join(['?'] * len(played_ids))
         c.execute(f'''
-            SELECT id, question, options, correct_option_id, rarity FROM base_quizzes
+            SELECT id, question, options, correct_option_id, rarity, explanation FROM base_quizzes
             WHERE id NOT IN ({placeholders})
             ORDER BY RANDOM() LIMIT 1
         ''', played_ids)
     else:
-        c.execute('SELECT id, question, options, correct_option_id, rarity FROM base_quizzes ORDER BY RANDOM() LIMIT 1')
+        c.execute('SELECT id, question, options, correct_option_id, rarity, explanation FROM base_quizzes ORDER BY RANDOM() LIMIT 1')
 
     row = c.fetchone()
     conn.close()
     return row
 
-def add_base_quiz(question, options, correct_option_id):
+def add_base_quiz(question, options, correct_option_id, explanation=""):
     rarity_roll = random.random()
     if rarity_roll < 0.60:
         rarity = "common"
@@ -195,8 +204,8 @@ def add_base_quiz(question, options, correct_option_id):
 
     conn = sqlite3.connect(BASE_QUIZZES_DB)
     c = conn.cursor()
-    c.execute('INSERT INTO base_quizzes (question, options, correct_option_id, rarity, date) VALUES (?, ?, ?, ?, ?)',
-              (question, options, correct_option_id, rarity, datetime.now().isoformat()))
+    c.execute('INSERT INTO base_quizzes (question, options, correct_option_id, rarity, explanation, date) VALUES (?, ?, ?, ?, ?, ?)',
+              (question, options, correct_option_id, rarity, explanation, datetime.now().isoformat()))
     conn.commit()
     conn.close()
     return rarity
@@ -210,7 +219,12 @@ def count_quizzes_by_rarity():
     return result
 
 def parse_quiz_line(line):
-    match = re.match(r'^(.+?)\s*\((.+)\)\s*$', line.strip())
+    # Разделяем на строки (вопрос и объяснение)
+    lines = line.strip().split('\n', 1)
+    main_line = lines[0].strip()
+    explanation = lines[1].strip() if len(lines) > 1 else ""
+    
+    match = re.match(r'^(.+?)\s*\((.+)\)\s*$', main_line)
     if not match:
         return None
 
@@ -232,8 +246,7 @@ def parse_quiz_line(line):
     if correct_option_id is None:
         correct_option_id = 0
 
-    return question, cleaned, correct_option_id
-
+    return question, cleaned, correct_option_id, explanation
 # ===== ЗАГРУЗКА МЕМОВ =====
 def load_memes():
     if not os.path.exists(MEMES_FILE):
@@ -611,7 +624,7 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Сегодня ты забрал(-а-) все доступные викторины! Возвращайся завтра.")
         return
     
-    question_id, question, options_raw, correct_option_id, rarity = row
+    question_id, question, options_raw, correct_option_id, rarity, explanation = row
     options = options_raw.split('|||') if options_raw else []
     reward = RARITY_REWARDS.get(rarity, 1)
     
@@ -623,6 +636,7 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "correct_option_id": correct_option_id,
         "reward": reward,
         "rarity": rarity,
+        "explanation": explanation,
         "start_time": time.time()
     }
     context.user_data['quiz_question'] = quiz_data
@@ -665,29 +679,37 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     q = context.user_data.get('quiz_question')
     if not q:
+        # Если вопроса нет — просто игнорируем, ничего не меняем
         return
     
+    # === ЕСЛИ ЧУЖОЙ НАЖАЛ ===
     if q.get("user_id") != user_id:
         await context.bot.send_message(
             chat_id=user_id,
             text="⛔ Аттатата! Это не твой квиз, проказник! 😡"
         )
-        return
+        return  # Выходим, НЕ ТРОГАЕМ СООБЩЕНИЕ
     
+    # === ПРОВЕРКА: НЕ УСТАРЕЛ ЛИ ВОПРОС (4 часа) ===
     quiz_time = q.get("start_time", 0)
     if time.time() - quiz_time >= 14400:
         del context.user_data['quiz_question']
         await query.edit_message_text("⏳ Вопрос устарел (прошло больше 4 часов). Напиши /quiz для новой викторины.")
         return
     
+    # === ДАЛЬШЕ ДЛЯ ВЛАДЕЛЬЦА ===
     selected = int(query.data.split("_")[-1])
     correct = q["correct_option_id"]
     reward = q.get("reward", 1)
     rarity = q.get("rarity", "common")
     question_id = q.get("question_id")
+    explanation = q.get("explanation", "")
     
     stats = get_user_stats(user_id)
     old_rank = get_rank(stats["score"])
+    
+    # Формируем текст объяснения (если есть)
+    explanation_text = f"\n\n💡 {explanation}" if explanation else ""
     
     if selected == correct:
         stats["score"] += reward
@@ -702,24 +724,274 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text(
             f"✅ *Правильно!* +{reward} баллов {RARITY_EMOJI_ONLY.get(rarity, '')}{rank_up_msg}\n\n"
             f"🏆 Баллы: {stats['score']}\n"
-            f"🎖️ Ранг: {new_rank['emoji']} {new_rank['name']}",
+            f"🎖️ Ранг: {new_rank['emoji']} {new_rank['name']}{explanation_text}",
             parse_mode="Markdown"
         )
     else:
-        stats["score"] -= 1
+        # === ЗАЩИТА ОТ ОТРИЦАТЕЛЬНОГО БАЛАНСА ===
+        if stats["score"] > 0:
+            stats["score"] -= 1
+            penalty_text = "–1 балл"
+        else:
+            penalty_text = "0 баллов (баланс не может уйти в минус)"
+        
         update_user_stats(user_id, stats["score"], stats["today_plays"], datetime.now().date().isoformat())
         mark_question_as_played(user_id, question_id)
         
         correct_answer = q["options"][correct]
         await query.edit_message_text(
-            f"❌ *Неправильно!* –1 балл\n\n"
-            f"Правильный ответ: *{correct_answer}*\n\n"
+            f"❌ *Неправильно!* {penalty_text}\n\n"
+            f"Правильный ответ: *{correct_answer}*{explanation_text}\n\n"
             f"🏆 Баллы: {stats['score']}\n"
             f"🎖️ Ранг: {old_rank['emoji']} {old_rank['name']}",
             parse_mode="Markdown"
         )
     
     del context.user_data['quiz_question']
+# ===== BATTLE QUIZ =====
+@antispam_decorator
+async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    first_name = update.effective_user.first_name
+    
+    if not update.message.reply_to_message:
+        await update.message.reply_text("❌ Ответь на сообщение друга, чтобы вызвать его на дуэль!")
+        return
+    
+    opponent = update.message.reply_to_message.from_user
+    if opponent.id == user_id:
+        await update.message.reply_text("❌ Нельзя вызвать самого себя.")
+        return
+    if opponent.is_bot:
+        await update.message.reply_text("❌ С ботами не сражаемся.")
+        return
+    
+    battle_id = f"{user_id}_{opponent.id}_{int(time.time())}"
+    
+    active_battles[battle_id] = {
+        "p1_id": user_id,
+        "p1_name": first_name,
+        "p2_id": opponent.id,
+        "p2_name": opponent.first_name,
+        "score1": 0,
+        "score2": 0,
+        "phase": "p1_answer",
+        "current_q": None,
+        "p1_correct": False
+    }
+    
+    keyboard = [[InlineKeyboardButton("✅ Принять вызов", callback_data=f"battle_accept_{battle_id}")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"⚔️ *Вызов на дуэль!*\n\n"
+        f"*{first_name}* вызывает *{opponent.first_name}* на интеллектуальную битву.\n"
+        f"Правила: по одному вопросу. Если оба ответят правильно — ничья.\n\n"
+        f"*{opponent.first_name}*, принимаешь вызов?",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+
+async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    battle_id = query.data.replace("battle_accept_", "")
+    
+    if battle_id not in active_battles:
+        await query.edit_message_text("❌ Эта дуэль уже неактивна.")
+        return
+        
+    battle = active_battles[battle_id]
+    
+    if query.from_user.id != battle["p2_id"]:
+        await query.answer("⛔ Это не твой вызов!", show_alert=True)
+        return
+    
+    await query.edit_message_text(
+        f"⚔️ *Дуэль началась!*\n\n"
+        f"*{battle['p1_name']}* vs *{battle['p2_name']}*\n\n"
+        f"🎯 Первый вопрос для *{battle['p1_name']}*.",
+        parse_mode="Markdown"
+    )
+    
+    await ask_battle_question(battle_id, context, query.message.chat_id)
+
+async def ask_battle_question(battle_id, context, chat_id):
+    battle = active_battles.get(battle_id)
+    if not battle:
+        return
+    
+    if battle["phase"] == "p1_answer":
+        current_player_id = battle["p1_id"]
+        current_player_name = battle["p1_name"]
+    else:
+        current_player_id = battle["p2_id"]
+        current_player_name = battle["p2_name"]
+    
+    row = get_random_question(current_player_id)
+    if not row:
+        await context.bot.send_message(chat_id, "❌ В базе закончились вопросы! Дуэль отменена.")
+        del active_battles[battle_id]
+        return
+
+    q_id, q_text, q_options_raw, correct_idx, rarity = row
+    q_options = q_options_raw.split('|||')
+    reward = RARITY_REWARDS.get(rarity, 1)
+    
+    battle["current_q"] = {
+        "id": q_id, "text": q_text, "options": q_options,
+        "correct": correct_idx, "reward": reward, "rarity": rarity
+    }
+    active_battles[battle_id] = battle
+    
+    options_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(q_options)])
+    
+    keyboard = []
+    row_buttons = []
+    for i in range(len(q_options)):
+        row_buttons.append(InlineKeyboardButton(str(i+1), callback_data=f"battle_ans_{battle_id}_{i}"))
+        if len(row_buttons) == 2:
+            keyboard.append(row_buttons)
+            row_buttons = []
+    if row_buttons:
+        keyboard.append(row_buttons)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"🎯 *Вопрос для {current_player_name}*:\n\n"
+             f"❓ {q_text}\n\n"
+             f"{options_text}\n\n"
+             f"{RARITY_EMOJIS.get(rarity, '')}",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+
+async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_")
+    battle_id = data[2]
+    selected = int(data[3])
+    user_id = query.from_user.id
+    
+    if battle_id not in active_battles:
+        await query.edit_message_text("❌ Дуэль не найдена.")
+        return
+    
+    battle = active_battles[battle_id]
+    q = battle.get("current_q")
+    
+    if not q:
+        return
+    
+    expected_id = battle["p1_id"] if battle["phase"] == "p1_answer" else battle["p2_id"]
+    if user_id != expected_id:
+        await query.answer("⛔ Сейчас не твой ход!", show_alert=True)
+        return
+    
+    is_correct = (selected == q["correct"])
+    
+    if battle["phase"] == "p1_answer":
+        if is_correct:
+            battle["p1_correct"] = True
+            await query.edit_message_text(
+                f"✅ *{battle['p1_name']}* ответил правильно!\n\n"
+                f"Теперь очередь *{battle['p2_name']}*.",
+                parse_mode="Markdown"
+            )
+        else:
+            battle["p1_correct"] = False
+            await query.edit_message_text(
+                f"❌ *{battle['p1_name']}* ошибся! (-1)\n"
+                f"Правильный ответ: *{q['options'][q['correct']]}*\n\n"
+                f"Теперь очередь *{battle['p2_name']}*. Если ответит правильно — победит!",
+                parse_mode="Markdown"
+            )
+        
+        battle["phase"] = "p2_answer"
+        active_battles[battle_id] = battle
+        await ask_battle_question(battle_id, context, query.message.chat_id)
+    
+    elif battle["phase"] == "p2_answer":
+        if is_correct:
+            if battle.get("p1_correct"):
+                await query.edit_message_text(
+                    f"✅ *{battle['p2_name']}* тоже ответил правильно!\n\n"
+                    f"🤝 *Ничья!* Оба оказались на высоте. Каждый получает +1 балл.",
+                    parse_mode="Markdown"
+                )
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw")
+            else:
+                await query.edit_message_text(
+                    f"✅ *{battle['p2_name']}* ответил правильно! (-1)\n"
+                    f"🏆 Победа присуждается *{battle['p2_name']}*!",
+                    parse_mode="Markdown"
+                )
+                await end_battle(battle_id, query.message.chat_id, context, winner="p2")
+        else:
+            if battle.get("p1_correct"):
+                await query.edit_message_text(
+                    f"❌ *{battle['p2_name']}* ошибся! (-1)\n"
+                    f"Правильный ответ: *{q['options'][q['correct']]}*\n"
+                    f"🏆 Победа присуждается *{battle['p1_name']}*!",
+                    parse_mode="Markdown"
+                )
+                await end_battle(battle_id, query.message.chat_id, context, winner="p1")
+            else:
+                await query.edit_message_text(
+                    f"❌ *{battle['p2_name']}* тоже ошибся! (-1)\n"
+                    f"Правильный ответ: *{q['options'][q['correct']]}*\n"
+                    f"🤝 *Ничья!* Оба ошиблись. Никто не получает штраф.",
+                    parse_mode="Markdown"
+                )
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw")
+    
+    active_battles[battle_id] = battle
+
+async def end_battle(battle_id, chat_id, context, winner):
+    battle = active_battles.get(battle_id)
+    if not battle:
+        return
+    
+    p1_name = battle["p1_name"]
+    p2_name = battle["p2_name"]
+    p1_id = battle["p1_id"]
+    p2_id = battle["p2_id"]
+    
+    result_text = ""
+    
+    if winner == "p1":
+        result_text = f"🏆 Победил *{p1_name}*!"
+        w_id, l_id = p1_id, p2_id
+    elif winner == "p2":
+        result_text = f"🏆 Победил *{p2_name}*!"
+        w_id, l_id = p2_id, p1_id
+    else:
+        result_text = "🤝 Ничья! Оба получают +1 балл."
+        w_id, l_id = None, None
+        for pid in [p1_id, p2_id]:
+            stats = get_user_stats(pid)
+            update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
+    
+    final_text = f"⚔️ *Дуэль окончена!*\n\n{result_text}\n"
+    
+    if w_id:
+        w_stats = get_user_stats(w_id)
+        update_user_stats(w_id, w_stats["score"] + 3, w_stats["today_plays"], datetime.now().date().isoformat())
+        
+        l_stats = get_user_stats(l_id)
+        if l_stats["score"] > 0:
+            update_user_stats(l_id, l_stats["score"] - 1, l_stats["today_plays"], datetime.now().date().isoformat())
+            final_text += f"\n🎁 Награды:\n🥇 Победитель +3 балла\n🥈 Проигравший -1 балл\n"
+        else:
+            final_text += f"\n🎁 Награды:\n🥇 Победитель +3 балла\n(У проигравшего 0 баллов, штраф не снят)\n"
+    
+    await context.bot.send_message(chat_id, final_text, parse_mode="Markdown")
+    del active_battles[battle_id]
 
 # ===== СТАТИСТИКА =====
 @antispam_decorator
@@ -1079,8 +1351,9 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Топ и статистика полностью сброшены!")
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Если бот не ждёт файл для basequiz — просто игнорируем
     if context.user_data.get('step') != 'waiting_for_base_quiz':
-        return
+        return  # ← ПРОСТО МОЛЧИМ
     
     document = update.message.document
     if not document.file_name.endswith('.txt'):
@@ -1099,22 +1372,24 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         os.remove(file_path)
         
-        lines = text.strip().split('\n')
+        # Разделяем на блоки (вопрос + объяснение)
+        # Блоки разделяются пустой строкой
+        blocks = re.split(r'\n\s*\n', text.strip())
         added = 0
         errors = []
         
-        for line in lines:
-            line = line.strip()
-            if not line:
+        for block in blocks:
+            block = block.strip()
+            if not block:
                 continue
             
-            parsed = parse_quiz_line(line)
+            parsed = parse_quiz_line(block)
             if parsed:
-                question, options, correct_option_id = parsed
-                rarity = add_base_quiz(question, '|||'.join(options), correct_option_id)
+                question, options, correct_option_id, explanation = parsed
+                rarity = add_base_quiz(question, '|||'.join(options), correct_option_id, explanation)
                 added += 1
             else:
-                errors.append(f"❌ `{line[:40]}...`")
+                errors.append(f"❌ `{block[:40]}...`")
         
         result = f"✅ *Добавлено викторин из файла: {added}*"
         if errors:
@@ -1666,6 +1941,9 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("rp", rp_command))
     app.add_handler(CommandHandler("rplist", rplist))
     app.add_handler(CallbackQueryHandler(rplist_callback, pattern="rplist_"))
+    app.add_handler(CommandHandler("battlequiz", battlequiz))
+    app.add_handler(CallbackQueryHandler(battle_accept, pattern="battle_accept_"))
+    app.add_handler(CallbackQueryHandler(battle_answer, pattern="battle_ans_"))
 
     print("✅ Бот запущен!")
     app.run_polling()
