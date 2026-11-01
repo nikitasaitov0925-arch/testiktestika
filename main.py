@@ -17,12 +17,10 @@ from rebus import expression_to_blocks, draw_rebus_from_blocks, load_dictionary,
 # ===== НАСТРОЙКИ =====
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 5206039766
-QUIZ_FILE = "quizzes.json"
 MEMES_FILE = "memes.json"
-BASE_QUIZZES_DB = "base_quizzes.db"
-USERS_DB = "quiz_users.db"
+BASE_QUIZZES_DB = "/app/data/base_qu1zzes.db"
+USERS_DB = "/app/data/qu1z_users.db"
 
-# Хранилище активных ребусов
 active_rebuses = {}
 
 # ===== РЕДКОСТИ =====
@@ -75,9 +73,7 @@ def init_user_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (user_id INTEGER PRIMARY KEY,
-                  first_name TEXT,
-                  total INTEGER DEFAULT 0,
-                  rank TEXT DEFAULT "Новичок")''')
+                  first_name TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS completions
                  (user_id INTEGER,
                   quiz_id TEXT,
@@ -282,7 +278,6 @@ def antispam_decorator(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
 
-        # Очищаем активный ребус при любой команде (включая /rebus)
         if update.message and update.message.text and update.message.text.startswith('/'):
             if user_id in active_rebuses:
                 del active_rebuses[user_id]
@@ -295,6 +290,7 @@ def antispam_decorator(func):
         return await func(update, context)
     return wrapper
 
+# ===== RP-СИСТЕМА =====
 RP_TRIGGERS = {
     "чай джейса": {
         "type": "self",
@@ -324,21 +320,21 @@ RP_TRIGGERS = {
             "{user} открыл(-а-) дневник, но не смог(-ла-) ничего прочесть из-за шифра 😕 "
         ]
     },
-     "обнуление": {
+    "обнуление": {
         "type": "target",
         "responses": [
             "{user} понизил(-а-) до нулевого уровня {target} 🔮 ",
             "У {user} не вышло обнулить из-за пелены {target}! "
         ]
     },
-     "отвязка": {
+    "отвязка": {
         "type": "self",
         "responses": [
             "{user} успешно отвязался(-ась-) от времени 🕧",
             "{user} неудачно провел(-а-) операцию и погиб(-ла-) 💀"
         ]
     },
-     "смотрящий": {
+    "смотрящий": {
         "type": "self",
         "responses": [
             "{user} провел(-а-) увлекательную беседу со Временем 👀",
@@ -349,15 +345,9 @@ RP_TRIGGERS = {
             "{user} посмотрел(-а-) на Смотрящего и заметил(-а-) дружелюбие в его взгляде 👀",
             "{user} посмотрел(-а-) на Смотрящего и понял(-а-) что осталось недолго 👀",
             "{user} посмотрел(-а-) на Смотрящего и подвергся(-ась-) концентрированному времени👀",
-            
-            
-            
-            
-            
-            
         ]
     },
-     "аномалия": {
+    "аномалия": {
         "type": "self",
         "responses": [
             "{user} увидел(-а-) аномалию с Мистером О'Флафферти и был(-а-) испепелен(-а-) его лазерами💥 ",
@@ -371,65 +361,64 @@ RP_TRIGGERS = {
             "{user} увидел(-а-) аномалию с Воплощёнными и закрылся(-ась-) в сонном измерении на месяц 🏠 ",
             "{user} увидел(-а-) аномалию с масками Первых и нахлынули старые воспоминания 🎭 ",
             "{user} увидел(-а-) аномалию с взломанным Г.Л.А.С и решил(-а-) что повременит с белым пространством ⬜️ ",
-            "{user} благодаря аномалии смог(-ла-) узнать имя другого существа и навалял(-а-) ему 🤩 ",
+            "{user} благодаря аномалии смог узнать имя другого существа и навалял(-а-) ему 🤩 ",
             "{user} услышал(-а-) от Риз очередную чересчур знакомую фразу, что же это может значить? 🤔",
             "{user} увидел(-а-) аномалию и переместился(-ась-) в белое пространство 👻 ",
             "{user} не увидел(-а-) никаких аномалий ☹️",
         ]
     },
-     "трескануть орешки": {
+    "трескануть орешки": {
         "type": "target",
         "responses": [
             "{user} потрескал(-а-) орешки с {target} 🌰 ",
             "{user} не потрескали орешки с {target} так как белка все украла 😭"
         ]
     },
-     "орешки": {
+    "орешки": {
         "type": "self",
         "responses": [
             "{user} покушал(-а-) орешки биг боб 🌰 ",
             "{user} не поел(-а-) орешков биг боб, так как попался гнилой орешек 🤮 "
         ]
     },
-     "глорп": {
+    "глорп": {
         "type": "self",
         "responses": [
             "{user} ГЛОООРПНУЛСЯ(-ась-) по полной 🌕",
             "{user} слегка ГЛОООРПНУЛ(-а-) 🌘"
         ]
     },
-     "видомния": {
+    "видомния": {
         "type": "target",
         "responses": [
             "{user} отправил(-а-) в Видомнию поганца {target} ☄️ ",
             "У {user} не вышло отправить в Видомнию {target} 🌚"
         ]
     },
-     "скинтонит": {
+    "скинтонит": {
         "type": "self",
         "responses": [
             "{user} адаптировался(-ась-) к влиянию кристаллической пустоты ☸️ ",
             "{user} не смог(-ла-) справиться с тьмой и превратился(-ась-) в даска 😵 "
         ]
     },
-     "скинт": {
+    "скинт": {
         "type": "self",
         "responses": [
             "{user} посидел(-а-) возле Путеводного скинта и восстановился(-ась-) ☺️",
             "{user} заразил(-а-) скинт своей кровью и стал(-а-) еще сильнее 😈",
             "{user} был(-а-) отвергнут(-а-) Первой Матерью и распался(-ась-) на частицы по бесконечным вселенным 🌪",
             "{user} съел(-а-) скинт и увидел будущее своей ветки 👁 ",
-            
         ]
     },
-     "очищение": {
+    "очищение": {
         "type": "target",
         "responses": [
             "{user} придал(-а-) Очищению {target} 🧟 ",
             "{user} не смог(-ла-) осквернить душу и искру {target} 🛡"
         ]
     },
-     "тысяча глаз": {
+    "тысяча глаз": {
         "type": "self",
         "responses": [
             "{user} использовал(-а-) Тысячу Глаз и узрел(-а-) истинное будущее 👁 ",
@@ -437,7 +426,7 @@ RP_TRIGGERS = {
             "{user} использовал(-а-) Тысячу Глаз, но понял(-а-), что никто не способен видеть всех вариантов будущего 😰"
         ]
     },
-     "стирание": {
+    "стирание": {
         "type": "target",
         "responses": [
             "{user} стёр(-ла-) все воспоминания у {target} 🫡 ",
@@ -445,14 +434,14 @@ RP_TRIGGERS = {
             "{user} не смог(-ла-) стереть память {target} из-за модуля П.Е.Р.С.И.К 🤖",
         ]
     },
-     "кавински": {
+    "кавински": {
         "type": "self",
         "responses": [
             "{user} сходил(-а-) на свиданку вместе с Кавински 🎩",
             "{user} был(-а-) послан(-а-) Кавински и тот уехал в закат 🌅 "
         ]
     },
-     "селенцио бруно": {
+    "селенцио бруно": {
         "type": "self",
         "responses": [
             "{user} был(-а-) превращен(-а-) в Горбатика 🌑 ",
@@ -465,10 +454,10 @@ RP_TRIGGERS = {
             "{user} был(-а-) превращен(-а-) в Лололошку и переместился(-ась-) в прунус 🍒",
             "{user} был(-а-) превращен(-а-) в Междумирца и откатил(-а-) время вспять 🕰",
             "{user} был(-а-) превращен(-а-) в Джона Дейви Харриса и наделал(-а-) делов в Хэнфорте 🏙",
-            "{user} был(-а-) превращен(-а-) в бесформенную массу 🫣"    
+            "{user} был(-а-) превращен(-а-) в бесформенную массу 🫣"
         ]
     },
-     "гильдия": {
+    "гильдия": {
         "type": "self",
         "responses": [
             "{user} вступил(-а-) в гильдию воров и пустился(-ась-) во все тяжкие🟩",
@@ -479,10 +468,9 @@ RP_TRIGGERS = {
             "{user} не смог(-ла-) вступить ни в какую гильдию и был(-а-) выдворен из Поэны🫨",
             "{user} воспользовался(-ась-) неразберихой и стал(-а-) гарантом🤠",
             "{user} не смог(-ла-) вступить ни в какую гильдию и возглавил(-а-) гильдию дасков🌟",
-            
         ]
     },
-     "камео": {
+    "камео": {
         "type": "self",
         "responses": [
             "{user} в твою комнату ворвался Воланд и все сжег 🔥 ",
@@ -504,25 +492,23 @@ RP_TRIGGERS = {
             "{user} в твою комнату ворвался Ричард и начал устраивать над тобой пранки🫤"
         ]
     },
-     "ликвидация": {
+    "ликвидация": {
         "type": "target",
         "responses": [
             "{user} успешно ликвидировал(-а-) по воле Рехобоама {target}🖥",
             "{user} не смог(-ла-) провести постликвидацию {target} и за это был отправлен(-а-) в Пансионат🏥",
             "{user} успешно ликвидировал(-а-) выжившего в ветке {target} и потратил(-а-) все синкоины на игры🎰",
             "{user} не смог(-ла-) ликвидировать по воле Рехобоама {target} и сам(-а-) был ликвидирован(-а-)☠️",
-            
         ]
-     },
-     "сарасай кудасай": {
+    },
+    "сарасай кудасай": {
         "type": "target",
         "responses": [
             "{user} не смог(-ла-) применить истощение {target} и в отместку получил(-а-) я-ягоду в лицо🍓",
             "{user} довел(-а-) до полного истощения {target}🥵",
-            
         ]
-     },
-     "алгоритм": {
+    },
+    "алгоритм": {
         "type": "self",
         "responses": [
             "{user} отправился(-ась-) на свой алгоритм и теперь будет пахать поле в 993 тысячи гектар🤯",
@@ -533,16 +519,7 @@ RP_TRIGGERS = {
             "{user} отправился(-ась-) на свой алгоритм и теперь будет устранять неудобных людей👁",
             "{user} отправился(-ась-) на свой алгоритм и теперь будет героически спасать людей в пожарах и других чс🦸‍♂️",
             "{user} отправился(-ась-) на свой алгоритм и теперь будет управлять собственным поселением🏡"
-            
-            
-            
-            
         ]
-    
-    
-    
-    
-    
     }
 }
 
@@ -552,6 +529,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎯 *Бот викторин и ребусов*\n\n"
         "/quiz — случайная викторина (рейтинг)\n"
         "/rebus — отгадай ребус\n"
+        "/rp — ролевые команды\n"
+        "/rplist — список RP-команд\n"
         "/mm — случайный мем\n"
         "/stats — моя статистика\n"
         "/top — топ игроков\n"
@@ -566,6 +545,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📖 *Помощь по командам:*\n\n"
         "/quiz — викторина с рейтингом\n"
         "/rebus — отгадай ребус\n"
+        "/rp текст — ролевая команда\n"
+        "/rplist — список всех RP-команд\n"
         "/mm — случайный мем\n"
         "/stats — моя статистика\n"
         "/top — топ-10 игроков\n"
@@ -582,6 +563,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+@antispam_decorator
 async def donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("💳 Поддержать разработку", url="https://finance.ozon.ru/apps/sbp/ozonbankpay/019da166-0117-7486-83c4-ba6b6a587f43")]
@@ -609,21 +591,24 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_user_stats(user_id, stats["score"], 0, today)
     
     if stats["today_plays"] >= 5:
-        await update.message.reply_text("❌ Ты уже прошёл 5 викторин сегодня! Возвращайся завтра.")
+        await update.message.reply_text("❌ Ты уже забрал(-а-) 5 викторин сегодня! Возвращайся завтра.")
         return
     
-    # Проверяем, есть ли активный вопрос У ЭТОГО ПОЛЬЗОВАТЕЛЯ
     active = context.user_data.get('quiz_question')
     if active and active.get("user_id") == user_id:
-        await update.message.reply_text("❌ У тебя уже есть активный вопрос! Ответь на него, чтобы получить новый.")
-        return
+        quiz_time = active.get("start_time", 0)
+        if time.time() - quiz_time < 14400:
+            await update.message.reply_text("❌ У тебя уже есть активный вопрос! Ответь на него или подожди 4 часа если потерял(-а-) вопрос")
+            return
+        else:
+            del context.user_data['quiz_question']
     
     stats["today_plays"] += 1
     update_user_stats(user_id, stats["score"], stats["today_plays"], today)
     
     row = get_random_question(user_id)
     if not row:
-        await update.message.reply_text("❌ Сегодня ты прошёл все доступные викторины! Возвращайся завтра.")
+        await update.message.reply_text("❌ Сегодня ты забрал(-а-) все доступные викторины! Возвращайся завтра.")
         return
     
     question_id, question, options_raw, correct_option_id, rarity = row
@@ -637,16 +622,15 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "options": options,
         "correct_option_id": correct_option_id,
         "reward": reward,
-        "rarity": rarity
+        "rarity": rarity,
+        "start_time": time.time()
     }
     context.user_data['quiz_question'] = quiz_data
     
-    # Формируем текст с вариантами
     options_text = ""
     for i, opt in enumerate(options):
         options_text += f"{i+1}. {opt}\n"
     
-    # Кнопки с цифрами (по 2 в ряд)
     keyboard = []
     row_buttons = []
     for i in range(len(options)):
@@ -671,7 +655,7 @@ async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
-    
+
 async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -681,18 +665,21 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     q = context.user_data.get('quiz_question')
     if not q:
-        # Если вопроса нет — просто игнорируем, ничего не меняем
         return
     
-    # === ЕСЛИ ЧУЖОЙ НАЖАЛ ===
     if q.get("user_id") != user_id:
         await context.bot.send_message(
             chat_id=user_id,
             text="⛔ Аттатата! Это не твой квиз, проказник! 😡"
         )
-        return  # Выходим, НЕ ТРОГАЕМ СООБЩЕНИЕ
+        return
     
-    # === ДАЛЬШЕ ДЛЯ ВЛАДЕЛЬЦА ===
+    quiz_time = q.get("start_time", 0)
+    if time.time() - quiz_time >= 14400:
+        del context.user_data['quiz_question']
+        await query.edit_message_text("⏳ Вопрос устарел (прошло больше 4 часов). Напиши /quiz для новой викторины.")
+        return
+    
     selected = int(query.data.split("_")[-1])
     correct = q["correct_option_id"]
     reward = q.get("reward", 1)
@@ -733,6 +720,7 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     
     del context.user_data['quiz_question']
+
 # ===== СТАТИСТИКА =====
 @antispam_decorator
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -791,12 +779,10 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     message = "🏆 *Топ-10 игроков:*\n\n"
     for i, (user_id, name, score) in enumerate(top_users, 1):
-        # Если имя пустое или "Неизвестный" — пробуем получить через Telegram API
         if not name or name == "Неизвестный":
             try:
                 chat = await context.bot.get_chat(user_id)
                 name = chat.first_name or chat.username or "Неизвестный"
-                # Обновляем в базе
                 conn = sqlite3.connect(USERS_DB)
                 c2 = conn.cursor()
                 c2.execute('UPDATE users SET first_name = ? WHERE user_id = ?', (name, user_id))
@@ -809,6 +795,7 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"{i}. *{name}* — {score} баллов ({rank['emoji']} {rank['name']})\n"
 
     await update.message.reply_text(message, parse_mode="Markdown")
+
 # ===== МЕМЫ =====
 @antispam_decorator
 async def mm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -824,6 +811,7 @@ async def mm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"😂 *Мем от {m['date']}*\n\n👉 [Смотреть мем]({m['link']})", parse_mode="Markdown", disable_web_page_preview=True)
 
 # ===== РЕБУСЫ =====
+@antispam_decorator
 async def rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dictionary = load_dictionary("words.txt")
     if not dictionary:
@@ -890,6 +878,7 @@ async def rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+@antispam_decorator
 async def rebus_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect(USERS_DB)
     c = conn.cursor()
@@ -966,13 +955,11 @@ async def editstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ''', (target_user_id, new_score, datetime.now().date().isoformat()))
 
     c.execute('''
-        INSERT INTO users (user_id, first_name, total, rank)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO users (user_id, first_name)
+        VALUES (?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
-            first_name = excluded.first_name,
-            total = excluded.total,
-            rank = excluded.rank
-    ''', (target_user_id, "Неизвестный", new_score, get_rank(new_score)["name"]))
+            first_name = excluded.first_name
+    ''', (target_user_id, "Неизвестный"))
 
     conn.commit()
     conn.close()
@@ -1034,23 +1021,6 @@ async def base_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 @antispam_decorator
-async def backup_base(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ Нет прав")
-        return
-
-    if not os.path.exists(BASE_QUIZZES_DB):
-        await update.message.reply_text("❌ База вопросов не найдена")
-        return
-
-    with open(BASE_QUIZZES_DB, 'rb') as f:
-        await update.message.reply_document(
-            document=f,
-            filename=f"base_quizzes_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
-            caption="📦 Бэкап базы вопросов"
-        )
-
-@antispam_decorator
 async def backup_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ Нет прав")
@@ -1108,93 +1078,9 @@ async def reset_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ Топ и статистика полностью сброшены!")
 
-# ===== ОБРАБОТЧИКИ ТЕКСТА И ДОКУМЕНТОВ =====
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-     # === RP-ПРОВЕРКА (ПЕРВОЙ) ===
-    text = update.message.text.strip().lower()
-    user_name = update.effective_user.first_name
-
-    for trigger, responses in RP_TRIGGERS.items():
-        if trigger in text:
-            reply = random.choice(responses).replace("{user}", user_name)
-            await update.message.reply_text(reply)
-            return
-    # --- Сначала проверяем, не ответ ли на ребус ---
-    user_id = update.effective_user.id
-    if user_id in active_rebuses:
-        await check_rebus_answer(update, context)
-        return
-
-    # --- Потом проверяем, не ждём ли мы basequiz ---
-    if step == 'waiting_for_base_quiz':
-        text = update.message.text
-        lines = text.strip().split('\n')
-        added = 0
-        errors = []
-
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            parsed = parse_quiz_line(line)
-            if parsed:
-                question, options, correct_option_id = parsed
-                rarity = add_base_quiz(question, '|||'.join(options), correct_option_id)
-                added += 1
-            else:
-                errors.append(f"❌ `{line[:40]}...`")
-
-        result = f"✅ *Добавлено викторин: {added}*"
-        if errors:
-            result += f"\n\n⚠️ *Не удалось распарсить:*\n" + "\n".join(errors[:5])
-            if len(errors) > 5:
-                result += f"\n... и ещё {len(errors) - 5} ошибок"
-
-        await update.message.reply_text(result, parse_mode=None)
-        context.user_data['step'] = None
-        return
-
-    # Если ничего не ждём
-    await update.message.reply_text(
-        "❓ Я не понял.\n\n"
-        "Команды:\n"
-        "/quiz — викторина\n"
-        "/rebus — ребус\n"
-        "/mm — мем\n"
-        "/stats — статистика\n"
-        "/top — топ\n"
-        "/rebustop — топ ребусников\n"
-        "/help — помощь"
-    )
-
-async def check_rebus_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    answer = update.message.text.strip().lower()
-
-    active = active_rebuses.get(user_id)
-    if not active:
-        return  # нет активного ребуса — просто игнорируем
-
-    if answer == active["word"].lower():
-        user_name = update.effective_user.first_name
-        add_rebus_solve(user_id, user_name)
-
-        await update.message.reply_text(
-            f"✅ *{user_name}*, правильно! +1 очко!\n🎉 Загаданное слово: *{active['word']}*",
-            parse_mode="Markdown"
-        )
-        del active_rebuses[user_id]
-    else:
-        await update.message.reply_text(
-            "❌ Неправильно. Попробуй ещё раз или напиши /rebus для нового ребуса.",
-            parse_mode="Markdown"
-        )
-
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Если бот не ждёт файл для basequiz — просто игнорируем
     if context.user_data.get('step') != 'waiting_for_base_quiz':
-        return  # ← ПРОСТО МОЛЧИМ
+        return
     
     document = update.message.document
     if not document.file_name.endswith('.txt'):
@@ -1241,6 +1127,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+
 @antispam_decorator
 async def restore_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -1255,7 +1142,6 @@ async def restore_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "2. Нажми на него → 'Ответить'\n"
             "3. Напиши `/restore_top`\n\n"
             "📌 Команда должна быть ответом на сообщение с файлом!",
-
         )
         return
 
@@ -1282,7 +1168,6 @@ async def restore_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = sqlite3.connect(USERS_DB)
         c = conn.cursor()
 
-        # Очищаем старые данные перед восстановлением
         c.execute("DELETE FROM quiz_stats")
         c.execute("DELETE FROM users")
 
@@ -1297,18 +1182,15 @@ async def restore_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not user_id:
                 continue
 
-            # Восстанавливаем в quiz_stats
             c.execute('''
                 INSERT INTO quiz_stats (user_id, score, today_plays, last_play_date)
                 VALUES (?, ?, ?, ?)
             ''', (user_id, score, today_plays, last_play_date))
 
-            # Восстанавливаем в users
-            rank = get_rank(score)
             c.execute('''
-                INSERT INTO users (user_id, first_name, total, rank)
-                VALUES (?, ?, ?, ?)
-            ''', (user_id, first_name, score, rank["name"]))
+                INSERT INTO users (user_id, first_name)
+                VALUES (?, ?)
+            ''', (user_id, first_name))
 
             restored += 1
 
@@ -1322,7 +1204,6 @@ async def restore_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📊 Восстановлено записей: {restored}\n"
             f"📁 Файл: {document.file_name}\n\n"
             f"Теперь можно проверить через `/top`",
-
         )
 
     except Exception as e:
@@ -1341,7 +1222,6 @@ async def update_names(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect(USERS_DB)
     c = conn.cursor()
 
-    # Получаем всех пользователей из quiz_stats
     c.execute("SELECT user_id FROM quiz_stats")
     users = c.fetchall()
 
@@ -1356,11 +1236,10 @@ async def update_names(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ''', (first_name, user_id))
 
             if c.rowcount == 0:
-                # Если пользователя нет в users — создаём
                 c.execute('''
-                    INSERT INTO users (user_id, first_name, total, rank)
-                    SELECT ?, ?, score, rank FROM quiz_stats WHERE user_id = ?
-                ''', (user_id, first_name, user_id))
+                    INSERT INTO users (user_id, first_name)
+                    VALUES (?, ?)
+                ''', (user_id, first_name))
 
             updated += 1
             print(f"✅ Обновлён: {first_name} (ID: {user_id})")
@@ -1423,7 +1302,6 @@ async def restore_quizzes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_path = f"restore_quizzes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
         await file.download_to_drive(file_path)
 
-        # Проверяем, что файл — это SQLite база с таблицей base_quizzes
         try:
             conn_check = sqlite3.connect(file_path)
             c_check = conn_check.cursor()
@@ -1439,16 +1317,13 @@ async def restore_quizzes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.remove(file_path)
             return
 
-        # Заменяем текущую базу
         shutil.copy2(file_path, BASE_QUIZZES_DB)
 
-        # Проверяем, сколько записей загружено
         conn = sqlite3.connect(BASE_QUIZZES_DB)
         c = conn.cursor()
         c.execute('SELECT COUNT(*) FROM base_quizzes')
         count = c.fetchone()[0]
 
-        # Считаем по редкостям
         c.execute('SELECT rarity, COUNT(*) FROM base_quizzes GROUP BY rarity')
         rarity_stats = dict(c.fetchall())
         conn.close()
@@ -1495,7 +1370,6 @@ async def editrebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect(USERS_DB)
     c = conn.cursor()
     
-    # Проверяем, есть ли пользователь в таблице rebus_solves
     c.execute('SELECT user_name FROM rebus_solves WHERE user_id = ?', (target_user_id,))
     row = c.fetchone()
     
@@ -1504,12 +1378,9 @@ async def editrebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         c.execute('UPDATE rebus_solves SET solves = ? WHERE user_id = ?', (new_solves, target_user_id))
         await update.message.reply_text(f"🔄 Обновлён пользователь {user_name} (ID: {target_user_id}) → {new_solves} ребусов")
     else:
-        # Если пользователя нет — создаём
         await update.message.reply_text(
             f"❌ Пользователь с ID {target_user_id} не найден в топе ребусов.\n\n"
-            f"Сначала он должен отгадать хотя бы один ребус через /rebus,\n"
-            f"или укажи имя вручную:\n"
-            f"`/editrebus_name {target_user_id} Имя {new_solves}`",
+            f"Сначала он должен отгадать хотя бы один ребус через /rebus",
             parse_mode="Markdown"
         )
         conn.close()
@@ -1595,7 +1466,6 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = sqlite3.connect(USERS_DB)
         c = conn.cursor()
         
-        # Очищаем старые данные
         c.execute("DELETE FROM rebus_solves")
         
         restored = 0
@@ -1633,36 +1503,21 @@ async def restore_rebus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(file_path):
             os.remove(file_path)
 
+# ===== RP =====
+@antispam_decorator
 async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 rp_command ВЫЗВАНА")  # ← ДИАГНОСТИКА
-    print(f"📦 RP_TRIGGERS: {RP_TRIGGERS}")  # ← ЧТО В СЛОВАРЕ
-    
     if not context.args:
         await update.message.reply_text("📝 /rp текст")
         return
     
     full_text = " ".join(context.args).lower()
-    print(f"📩 Текст: {full_text}")  # ← ЧТО ПРИШЛО
-    
     user_name = update.effective_user.first_name
     target_name = None
     
-    import re
     mention_match = re.search(r'@(\w+)', full_text)
     if mention_match:
         target_username = mention_match.group(1)
-        try:
-            conn = sqlite3.connect(USERS_DB)
-            c = conn.cursor()
-            c.execute('SELECT first_name FROM users WHERE username LIKE ?', (f'%{target_username}%',))
-            row = c.fetchone()
-            conn.close()
-            if row:
-                target_name = row[0]
-            else:
-                target_name = f"@{target_username}"
-        except:
-            target_name = f"@{target_username}"
+        target_name = f"@{target_username}"
     
     if not target_name and update.message.reply_to_message:
         target_user = update.message.reply_to_message.from_user
@@ -1672,12 +1527,8 @@ async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not clean_text:
         clean_text = full_text
     
-    print(f"🔎 Чистый текст: {clean_text}")  # ← ЧТО ИЩЕМ
-    
     for trigger, data in RP_TRIGGERS.items():
-        print(f"🔍 Проверяю: '{trigger}' в '{clean_text}'")  # ← ПОИСК
         if trigger in clean_text:
-            print(f"✅ Найдено: {trigger}")  # ← ЕСЛИ НАШЛО
             rp_type = data.get("type", "self")
             responses = data["responses"]
             
@@ -1698,7 +1549,6 @@ async def rp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(reply)
                 return
     
-    print("❌ Ничего не найдено")  # ← ЕСЛИ НЕ НАШЛО
     await update.message.reply_text("❌ Не нашёл такой RP-фразы")
 
 @antispam_decorator
@@ -1707,14 +1557,12 @@ async def rplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 Список RP-команд пуст.")
         return
     
-    # Формируем список всех команд с типами
     all_commands = []
     for trigger, data in RP_TRIGGERS.items():
         rp_type = data.get("type", "self")
         label = "👤" if rp_type == "self" else "👥"
         all_commands.append(f"{label} `{trigger}`")
     
-    # Сохраняем в context для пагинации
     context.user_data['rp_list'] = all_commands
     
     page_size = 10
@@ -1724,7 +1572,7 @@ async def rplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start = page * page_size
     end = min(start + page_size, len(all_commands))
     
-    message = f"📋 *RP-команды (👤 - личная команда, 👥 - интерактивная команда)  (стр. {page + 1}/{total_pages})*\n\n"
+    message = f"📋 *RP-команды (👤 - личная, 👥 - интерактивная) (стр. {page + 1}/{total_pages})*\n\n"
     message += "\n".join(all_commands[start:end])
     message += "\n\n📝 `/rp текст` — использовать команду"
     
@@ -1748,10 +1596,8 @@ async def rplist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     page = int(query.data.split("_")[1])
     
-    # Берём список из context
     all_commands = context.user_data.get('rp_list', [])
     if not all_commands:
-        # Если список потерялся — пересобираем
         for trigger, data in RP_TRIGGERS.items():
             rp_type = data.get("type", "self")
             label = "👤" if rp_type == "self" else "👥"
@@ -1769,7 +1615,7 @@ async def rplist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start = page * page_size
     end = min(start + page_size, len(all_commands))
     
-    message = f"📋 *RP-команды (👤 - личная команда, 👥 - интерактивная команда) (стр. {page + 1}/{total_pages})*\n\n"
+    message = f"📋 *RP-команды (👤 - личная, 👥 - интерактивная) (стр. {page + 1}/{total_pages})*\n\n"
     message += "\n".join(all_commands[start:end])
     message += "\n\n📝 `/rp текст` — использовать команду"
     
@@ -1806,10 +1652,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("editstats", editstats))
     app.add_handler(CommandHandler("edittop", edittop))
     app.add_handler(CommandHandler("basequiz", base_quiz_command))
-    app.add_handler(CommandHandler("backup_base", backup_base))
     app.add_handler(CommandHandler("backup_top", backup_top))
     app.add_handler(CommandHandler("reset_top", reset_top))
-    # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_rebus_answer))
     app.add_handler(MessageHandler(filters.Document.TXT, handle_document))
     app.add_handler(CommandHandler("restore_top", restore_top))
