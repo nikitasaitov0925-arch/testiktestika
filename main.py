@@ -873,14 +873,15 @@ async def ask_battle_question(battle_id, context, chat_id):
         reply_markup=reply_markup
     )
 
+from telegram.error import BadRequest
+
 async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     # === ИСПРАВЛЕННЫЙ ПАРСИНГ ===
-    # Отрезаем "battle_ans_" спереди и выбранный вариант сзади
     parts = query.data.split("_")
-    selected = int(parts[-1])           # Последний элемент — это выбранный вариант
+    selected = int(parts[-1])           # Последний элемент — выбранный вариант
     battle_id = "_".join(parts[2:-1])   # Всё, что между "battle_ans_" и вариантом
     user_id = query.from_user.id
     
@@ -924,18 +925,22 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif battle["phase"] == "p2_answer":
         if is_correct:
             if battle.get("p1_correct"):
+                # Оба ответили правильно -> ничья с бонусом
                 text = f"✅ *{battle['p2_name']}* тоже ответил правильно!\n\n🤝 *Ничья!* Оба оказались на высоте. Каждый получает +1 балл."
-                await end_battle(battle_id, query.message.chat_id, context, winner="draw")
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_correct")
             else:
+                # Второй ответил правильно, первый ошибся -> победа второго
                 text = f"✅ *{battle['p2_name']}* ответил правильно!\n🏆 Победа присуждается *{battle['p2_name']}*!"
                 await end_battle(battle_id, query.message.chat_id, context, winner="p2")
         else:
             if battle.get("p1_correct"):
+                # Первый ответил правильно, второй ошибся -> победа первого
                 text = f"❌ *{battle['p2_name']}* ошибся! (-1)\nПравильный ответ: *{q['options'][q['correct']]}*\n🏆 Победа присуждается *{battle['p1_name']}*!"
                 await end_battle(battle_id, query.message.chat_id, context, winner="p1")
             else:
-                text = f"❌ *{battle['p2_name']}* тоже ошибся! (-1)\nПравильный ответ: *{q['options'][q['correct']]}*\n🤝 *Ничья!* Оба ошиблись. Никто не получает штраф."
-                await end_battle(battle_id, query.message.chat_id, context, winner="draw")
+                # Оба ответили неправильно -> ничья без бонусов
+                text = f"❌ *{battle['p2_name']}* тоже ошибся! (-1)\nПравильный ответ: *{q['options'][q['correct']]}*\n🤝 *Ничья!* Оба ошиблись. Никто не получает награду и не теряет баллы."
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_wrong")
                 
         try:
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
@@ -944,7 +949,7 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     active_battles[battle_id] = battle
 
-async def end_battle(battle_id, chat_id, context, winner):
+async def end_battle(battle_id, chat_id, context, winner, reason=""):
     battle = active_battles.get(battle_id)
     if not battle:
         return
@@ -963,11 +968,14 @@ async def end_battle(battle_id, chat_id, context, winner):
         result_text = f"🏆 Победил *{p2_name}*!"
         w_id, l_id = p2_id, p1_id
     else:
-        result_text = "🤝 Ничья! Оба получают +1 балл."
-        w_id, l_id = None, None
-        for pid in [p1_id, p2_id]:
-            stats = get_user_stats(pid)
-            update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
+        # === ЛОГИКА ДЛЯ НИЧЬЕЙ ===
+        if reason == "both_correct":
+            result_text = "🤝 Ничья! Оба ответили правильно и получают по +1 баллу за старание."
+            for pid in [p1_id, p2_id]:
+                stats = get_user_stats(pid)
+                update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
+        else:
+            result_text = "🤝 Ничья! Оба ошиблись. Никто не получает баллов и не теряет их."
     
     final_text = f"⚔️ *Дуэль окончена!*\n\n{result_text}\n"
     
@@ -982,9 +990,12 @@ async def end_battle(battle_id, chat_id, context, winner):
         else:
             final_text += f"\n🎁 Награды:\n🥇 Победитель +3 балла\n(У проигравшего 0 баллов, штраф не снят)\n"
     
-    await context.bot.send_message(chat_id, final_text, parse_mode="Markdown")
+    try:
+        await context.bot.send_message(chat_id, final_text, parse_mode="Markdown")
+    except Exception:
+        pass
+        
     del active_battles[battle_id]
-
 # ===== СТАТИСТИКА =====
 @antispam_decorator
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
