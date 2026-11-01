@@ -910,13 +910,6 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ЭТАП 1: ОТВЕЧАЕТ ПЕРВЫЙ ИГРОК
     # ==========================================
     if battle["phase"] == "p1_answer":
-        # 1. Убираем кнопки у старого сообщения, чтобы нельзя было нажать дважды
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except BadRequest:
-            pass
-
-        # 2. Формируем текст
         if is_correct:
             battle["p1_correct"] = True
             text = f"✅ *{battle['p1_name']}* ответил правильно!\n\nТеперь очередь *{battle['p2_name']}*."
@@ -924,38 +917,50 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             battle["p1_correct"] = False
             text = f"❌ *{battle['p1_name']}* ошибся!\nПравильный ответ: *{q['options'][q['correct']]}*\n\nТеперь очередь *{battle['p2_name']}*. Если ответит правильно — победит!"
         
-        # 3. Отправляем новый текст
+        # Обновляем сообщение и убираем кнопки
         try:
-            await query.edit_message_text(text, parse_mode="Markdown")
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
         except BadRequest:
             pass
             
-        # 4. Меняем ход и задаем вопрос второму
         battle["phase"] = "p2_answer"
         active_battles[battle_id] = battle
+        # Задаем вопрос второму игроку НОВЫМ сообщением
         await ask_battle_question(battle_id, context, query.message.chat_id)
     
     # ==========================================
     # ЭТАП 2: ОТВЕЧАЕТ ВТОРОЙ ИГРОК
     # ==========================================
     elif battle["phase"] == "p2_answer":
-        # 1. Сразу убираем кнопки, чтобы нельзя было нажать дважды
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except BadRequest:
-            pass
-
-        # 2. Вызываем end_battle, который отправит финальное сообщение
+        # 1. Формируем текст результата
         if is_correct:
             if battle.get("p1_correct"):
-                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_correct")
+                text = f"✅ *{battle['p2_name']}* тоже ответил правильно!\n\n🤝 *Ничья!* Оба оказались на высоте."
+                winner = "draw"
+                reason = "both_correct"
             else:
-                await end_battle(battle_id, query.message.chat_id, context, winner="p2")
+                text = f"✅ *{battle['p2_name']}* ответил правильно!\n🏆 Победа присуждается *{battle['p2_name']}*!"
+                winner = "p2"
+                reason = ""
         else:
             if battle.get("p1_correct"):
-                await end_battle(battle_id, query.message.chat_id, context, winner="p1")
+                text = f"❌ *{battle['p2_name']}* ошибся!\nПравильный ответ: *{q['options'][q['correct']]}*\n🏆 Победа присуждается *{battle['p1_name']}*!"
+                winner = "p1"
+                reason = ""
             else:
-                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_wrong")
+                text = f"❌ *{battle['p2_name']}* тоже ошибся!\nПравильный ответ: *{q['options'][q['correct']]}*\n🤝 *Ничья!* Оба ошиблись."
+                winner = "draw"
+                reason = "both_wrong"
+
+        # 2. Редактируем СООБЩЕНИЕ С КНОПКАМИ (убираем кнопки и пишем результат)
+        try:
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
+        except BadRequest:
+            pass
+            
+        # 3. Вызываем завершение дуэли (передаем already_edited=True, чтобы он не шлал новое сообщение, а только начислил баллы)
+        await end_battle(battle_id, query.message.chat_id, context, winner=winner, reason=reason, already_edited=True)
+
 
 async def end_battle(battle_id, chat_id, context, winner, reason=""):
     battle = active_battles.get(battle_id)
