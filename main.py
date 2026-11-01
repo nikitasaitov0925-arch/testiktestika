@@ -836,14 +836,16 @@ async def ask_battle_question(battle_id, context, chat_id):
         del active_battles[battle_id]
         return
 
+    # === ВОТ ЗДЕСЬ ИСПРАВЛЕНИЕ (6 переменных вместо 5) ===
     q_id, q_text, q_options_raw, correct_idx, rarity, explanation = row
+    
     q_options = q_options_raw.split('|||')
     reward = RARITY_REWARDS.get(rarity, 1)
     
     battle["current_q"] = {
         "id": q_id, "text": q_text, "options": q_options,
-        "correct": correct_idx, "reward": reward, "rarity": rarity
-        "explanation": explanation
+        "correct": correct_idx, "reward": reward, "rarity": rarity,
+        "explanation": explanation  # ← ДОБАВИЛИ
     }
     active_battles[battle_id] = battle
     
