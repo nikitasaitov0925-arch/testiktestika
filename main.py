@@ -679,25 +679,21 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     q = context.user_data.get('quiz_question')
     if not q:
-        # Если вопроса нет — просто игнорируем, ничего не меняем
         return
     
-    # === ЕСЛИ ЧУЖОЙ НАЖАЛ ===
     if q.get("user_id") != user_id:
         await context.bot.send_message(
             chat_id=user_id,
             text="⛔ Аттатата! Это не твой квиз, проказник! 😡"
         )
-        return  # Выходим, НЕ ТРОГАЕМ СООБЩЕНИЕ
+        return
     
-    # === ПРОВЕРКА: НЕ УСТАРЕЛ ЛИ ВОПРОС (4 часа) ===
     quiz_time = q.get("start_time", 0)
     if time.time() - quiz_time >= 14400:
         del context.user_data['quiz_question']
-        await query.edit_message_text("⏳ Вопрос устарел (прошло больше 4 часов). Напиши /quiz для новой викторины.")
+        await query.edit_message_text("⏳ Вопрос устарел (прошло больше 4 часов). Напиши /quiz для новой викторины.", reply_markup=None)
         return
     
-    # === ДАЛЬШЕ ДЛЯ ВЛАДЕЛЬЦА ===
     selected = int(query.data.split("_")[-1])
     correct = q["correct_option_id"]
     reward = q.get("reward", 1)
@@ -707,8 +703,6 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     stats = get_user_stats(user_id)
     old_rank = get_rank(stats["score"])
-    
-    # Формируем текст объяснения (если есть)
     explanation_text = f"\n\n💡 {explanation}" if explanation else ""
     
     if selected == correct:
@@ -721,14 +715,15 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if new_rank["min_score"] > old_rank["min_score"]:
             rank_up_msg = f"\n\n🎉 **ПОВЫШЕНИЕ РАНГА!**\n{old_rank['emoji']} {old_rank['name']} → {new_rank['emoji']} {new_rank['name']}"
         
+        # === УБИРАЕМ КНОПКИ И МЕНЯЕМ ТЕКСТ ===
         await query.edit_message_text(
             f"✅ *Правильно!* +{reward} баллов {RARITY_EMOJI_ONLY.get(rarity, '')}{rank_up_msg}\n\n"
             f"🏆 Баллы: {stats['score']}\n"
             f"🎖️ Ранг: {new_rank['emoji']} {new_rank['name']}{explanation_text}",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=None  # ← ВОТ ЭТО
         )
     else:
-        # === ЗАЩИТА ОТ ОТРИЦАТЕЛЬНОГО БАЛАНСА ===
         if stats["score"] > 0:
             stats["score"] -= 1
             penalty_text = "–1 балл"
@@ -744,7 +739,8 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"Правильный ответ: *{correct_answer}*{explanation_text}\n\n"
             f"🏆 Баллы: {stats['score']}\n"
             f"🎖️ Ранг: {old_rank['emoji']} {old_rank['name']}",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=None  # ← ВОТ ЭТО
         )
     
     del context.user_data['quiz_question']
@@ -799,7 +795,7 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     battle_id = query.data.replace("battle_accept_", "")
     
     if battle_id not in active_battles:
-        await query.edit_message_text("❌ Эта дуэль уже неактивна.")
+        await query.answer("❌ Эта дуэль уже неактивна.", show_alert=True)
         return
         
     battle = active_battles[battle_id]
@@ -808,10 +804,15 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⛔ Это не твой вызов!", show_alert=True)
         return
     
-    await query.edit_message_text(
-        f"⚔️ *Дуэль началась!*\n\n"
-        f"*{battle['p1_name']}* vs *{battle['p2_name']}*\n\n"
-        f"🎯 Первый вопрос для *{battle['p1_name']}*.",
+    # === УБИРАЕМ КНОПКУ "ПРИНЯТЬ" С СООБЩЕНИЯ ВЫЗОВА ===
+    await query.edit_message_reply_markup(reply_markup=None)
+    
+    # === ОТПРАВЛЯЕМ НОВОЕ СООБЩЕНИЕ ===
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text=f"⚔️ *Дуэль началась!*\n\n"
+             f"*{battle['p1_name']}* vs *{battle['p2_name']}*\n\n"
+             f"🎯 Первый вопрос для *{battle['p1_name']}*.",
         parse_mode="Markdown"
     )
     
