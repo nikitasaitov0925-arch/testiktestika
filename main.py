@@ -877,13 +877,18 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    data = query.data.split("_")
-    battle_id = data[2]
-    selected = int(data[3])
+    # === ИСПРАВЛЕННЫЙ ПАРСИНГ ===
+    # Отрезаем "battle_ans_" спереди и выбранный вариант сзади
+    parts = query.data.split("_")
+    selected = int(parts[-1])           # Последний элемент — это выбранный вариант
+    battle_id = "_".join(parts[2:-1])   # Всё, что между "battle_ans_" и вариантом
     user_id = query.from_user.id
     
     if battle_id not in active_battles:
-        await query.edit_message_text("❌ Дуэль не найдена.")
+        try:
+            await query.edit_message_text("❌ Дуэль не найдена.", reply_markup=None)
+        except BadRequest:
+            pass
         return
     
     battle = active_battles[battle_id]
@@ -902,20 +907,16 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if battle["phase"] == "p1_answer":
         if is_correct:
             battle["p1_correct"] = True
-            await query.edit_message_text(
-                f"✅ *{battle['p1_name']}* ответил правильно!\n\n"
-                f"Теперь очередь *{battle['p2_name']}*.",
-                parse_mode="Markdown"
-            )
+            text = f"✅ *{battle['p1_name']}* ответил правильно!\n\nТеперь очередь *{battle['p2_name']}*."
         else:
             battle["p1_correct"] = False
-            await query.edit_message_text(
-                f"❌ *{battle['p1_name']}* ошибся! (-1)\n"
-                f"Правильный ответ: *{q['options'][q['correct']]}*\n\n"
-                f"Теперь очередь *{battle['p2_name']}*. Если ответит правильно — победит!",
-                parse_mode="Markdown"
-            )
+            text = f"❌ *{battle['p1_name']}* ошибся! (-1)\nПравильный ответ: *{q['options'][q['correct']]}*\n\nТеперь очередь *{battle['p2_name']}*. Если ответит правильно — победит!"
         
+        try:
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
+        except BadRequest:
+            pass
+            
         battle["phase"] = "p2_answer"
         active_battles[battle_id] = battle
         await ask_battle_question(battle_id, context, query.message.chat_id)
@@ -923,37 +924,24 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif battle["phase"] == "p2_answer":
         if is_correct:
             if battle.get("p1_correct"):
-                await query.edit_message_text(
-                    f"✅ *{battle['p2_name']}* тоже ответил правильно!\n\n"
-                    f"🤝 *Ничья!* Оба оказались на высоте. Каждый получает +1 балл.",
-                    parse_mode="Markdown"
-                )
+                text = f"✅ *{battle['p2_name']}* тоже ответил правильно!\n\n🤝 *Ничья!* Оба оказались на высоте. Каждый получает +1 балл."
                 await end_battle(battle_id, query.message.chat_id, context, winner="draw")
             else:
-                await query.edit_message_text(
-                    f"✅ *{battle['p2_name']}* ответил правильно! (-1)\n"
-                    f"🏆 Победа присуждается *{battle['p2_name']}*!",
-                    parse_mode="Markdown"
-                )
+                text = f"✅ *{battle['p2_name']}* ответил правильно!\n🏆 Победа присуждается *{battle['p2_name']}*!"
                 await end_battle(battle_id, query.message.chat_id, context, winner="p2")
         else:
             if battle.get("p1_correct"):
-                await query.edit_message_text(
-                    f"❌ *{battle['p2_name']}* ошибся! (-1)\n"
-                    f"Правильный ответ: *{q['options'][q['correct']]}*\n"
-                    f"🏆 Победа присуждается *{battle['p1_name']}*!",
-                    parse_mode="Markdown"
-                )
+                text = f"❌ *{battle['p2_name']}* ошибся! (-1)\nПравильный ответ: *{q['options'][q['correct']]}*\n🏆 Победа присуждается *{battle['p1_name']}*!"
                 await end_battle(battle_id, query.message.chat_id, context, winner="p1")
             else:
-                await query.edit_message_text(
-                    f"❌ *{battle['p2_name']}* тоже ошибся! (-1)\n"
-                    f"Правильный ответ: *{q['options'][q['correct']]}*\n"
-                    f"🤝 *Ничья!* Оба ошиблись. Никто не получает штраф.",
-                    parse_mode="Markdown"
-                )
+                text = f"❌ *{battle['p2_name']}* тоже ошибся! (-1)\nПравильный ответ: *{q['options'][q['correct']]}*\n🤝 *Ничья!* Оба ошиблись. Никто не получает штраф."
                 await end_battle(battle_id, query.message.chat_id, context, winner="draw")
-    
+                
+        try:
+            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
+        except BadRequest:
+            pass
+
     active_battles[battle_id] = battle
 
 async def end_battle(battle_id, chat_id, context, winner):
