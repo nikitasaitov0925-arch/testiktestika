@@ -62,11 +62,11 @@ RANKS = [
     {"name": "Сценарист ST", "min_score": 500, "emoji": "📖"},
 ]
 
-def get_rank(score):
-    for rank in reversed(RANKS):
-        if score >= rank["min_score"]:
-            return rank
-    return RANKS[0]
+ZERO_SEASON_TOP = [
+    # Сюда вставишь свои данные, например:
+    # {"name": "Алексей", "score": 150},
+    # {"name": "Никита", "score": 120},
+]
 
 # ===== БАЗА ДАННЫХ =====
 def init_user_db():
@@ -1906,6 +1906,28 @@ async def rplist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     
     await query.edit_message_text(message, parse_mode="Markdown", reply_markup=reply_markup)
+
+@antispam_decorator
+async def zero_season_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not ZERO_SEASON_TOP:
+        await update.message.reply_text("📭 Топ нулевого сезона пока пуст.")
+        return
+
+    message = "🏆 *Топ-5 игроков Нулевого сезона:*\n\n"
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+    
+    for i, player in enumerate(ZERO_SEASON_TOP[:5]):
+        rank = get_rank(player["score"])
+        message += f"{medals[i]} *{player['name']}* — {player['score']} баллов ({rank['emoji']} {rank['name']})\n"
+    
+    message += "\n_Да будет новая эпоха!_"
+    await update.message.reply_text(message, parse_mode="Markdown")
+
+def get_rank(score):
+    for rank in reversed(RANKS):
+        if score >= rank["min_score"]:
+            return rank
+    return RANKS[0]
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
