@@ -105,16 +105,16 @@ def init_base_quizzes_db():
                   explanation TEXT DEFAULT '',
                   date TEXT)''')
     
-    # Добавляем колонку, если база старая (на случай обновления)
+    # Миграция для старых баз
     c.execute("PRAGMA table_info(base_quizzes)")
     columns = [col[1] for col in c.fetchall()]
     if 'explanation' not in columns:
         c.execute("ALTER TABLE base_quizzes ADD COLUMN explanation TEXT DEFAULT ''")
+        print("✅ Колонка explanation добавлена в старую базу")
     
     conn.commit()
     conn.close()
     print("✅ База вопросов инициализирована")
-
 # ===== ФУНКЦИИ ДЛЯ РЕБУСОВ =====
 def add_rebus_solve(user_id, user_name):
     conn = sqlite3.connect(USERS_DB)
@@ -1593,6 +1593,16 @@ async def restore_quizzes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         shutil.copy2(file_path, BASE_QUIZZES_DB)
+        # Миграция: добавляем колонку explanation, если её нет
+        conn_migrate = sqlite3.connect(BASE_QUIZZES_DB)
+        c_migrate = conn_migrate.cursor()
+        c_migrate.execute("PRAGMA table_info(base_quizzes)")
+        columns = [col[1] for col in c_migrate.fetchall()]
+        if 'explanation' not in columns:
+            c_migrate.execute("ALTER TABLE base_quizzes ADD COLUMN explanation TEXT DEFAULT ''")
+            conn_migrate.commit()
+            print("✅ Добавлена колонка explanation")
+        conn_migrate.close()
 
         conn = sqlite3.connect(BASE_QUIZZES_DB)
         c = conn.cursor()
