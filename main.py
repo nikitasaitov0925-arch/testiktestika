@@ -749,6 +749,18 @@ async def handle_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     first_name = update.effective_user.first_name
+    today = datetime.now().date().isoformat()
+    
+    # Проверяем попытки вызывающего
+    stats = get_user_stats(user_id)
+    if stats["last_play_date"] != today:
+        stats["today_plays"] = 0
+        stats["last_play_date"] = today
+        update_user_stats(user_id, stats["score"], 0, today)
+    
+    if stats["today_plays"] >= 5:
+        await update.message.reply_text("❌ У тебя закончились попытки на сегодня! Возвращайся завтра.")
+        return
     
     if not update.message.reply_to_message:
         await update.message.reply_text("❌ Ответь на сообщение друга, чтобы вызвать его на дуэль!")
@@ -782,7 +794,8 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"⚔️ *Вызов на дуэль!*\n\n"
         f"*{first_name}* вызывает *{opponent.first_name}* на интеллектуальную битву.\n"
-        f"Правила: по одному вопросу. Если оба ответят правильно — ничья.\n\n"
+        f"Стоимость: 1 попытка викторины у каждого.\n"
+        f"Победа даёт +3 балла!\n\n"
         f"*{opponent.first_name}*, принимаешь вызов?",
         parse_mode="Markdown",
         reply_markup=reply_markup
@@ -795,19 +808,39 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     battle_id = query.data.replace("battle_accept_", "")
     
     if battle_id not in active_battles:
-        await query.answer("❌ Эта дуэль уже неактивна.", show_alert=True)
+        await query.edit_message_text("❌ Эта дуэль уже неактивна.")
         return
         
     battle = active_battles[battle_id]
+    user_id = query.from_user.id
+    today = datetime.now().date().isoformat()
     
-    if query.from_user.id != battle["p2_id"]:
+    if user_id != battle["p2_id"]:
         await query.answer("⛔ Это не твой вызов!", show_alert=True)
         return
+
+    # === ПРОВЕРКА ПОПЫТОК У ВТОРОГО ИГРОКА ===
+    stats2 = get_user_stats(user_id)
+    if stats2["last_play_date"] != today:
+        stats2["today_plays"] = 0
+        stats2["last_play_date"] = today
+        update_user_stats(user_id, stats2["score"], 0, today)
+        
+    if stats2["today_plays"] >= 5:
+        await query.answer("❌ У тебя закончились попытки на сегодня!", show_alert=True)
+        return
     
-    # === УБИРАЕМ КНОПКУ "ПРИНЯТЬ" С СООБЩЕНИЯ ВЫЗОВА ===
+    # === ТРАТИМ ПОПЫТКУ У ВТОРОГО ===
+    update_user_stats(user_id, stats2["score"], stats2["today_plays"] + 1, today)
+    
+    # === ТРАТИМ ПОПЫТКУ У ПЕРВОГО (он уже согласился, вызвав на дуэль) ===
+    stats1 = get_user_stats(battle["p1_id"])
+    update_user_stats(battle["p1_id"], stats1["score"], stats1["today_plays"] + 1, today)
+    
+    # Убираем кнопку
     await query.edit_message_reply_markup(reply_markup=None)
     
-    # === ОТПРАВЛЯЕМ НОВОЕ СООБЩЕНИЕ ===
+    # Отправляем сообщение о старте
     await context.bot.send_message(
         chat_id=query.message.chat_id,
         text=f"⚔️ *Дуэль началась!*\n\n"
@@ -817,7 +850,6 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await ask_battle_question(battle_id, context, query.message.chat_id)
-
 async def ask_battle_question(battle_id, context, chat_id):
     battle = active_battles.get(battle_id)
     if not battle:
