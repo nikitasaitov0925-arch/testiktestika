@@ -921,6 +921,8 @@ from telegram.error import BadRequest
 
 from telegram.error import BadRequest
 
+from telegram.error import BadRequest
+
 async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -951,7 +953,7 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_correct = (selected == q["correct"])
     reward = q.get("reward", 1)
     
-    # === НАЧИСЛЕНИЕ БАЛЛОВ ЗА РЕДКОСТЬ ===
+    # === 1. НАЧИСЛЯЕМ БАЛЛЫ ЗА ВОПРОС ===
     stats = get_user_stats(user_id)
     if is_correct:
         stats["score"] += reward
@@ -965,6 +967,9 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     update_user_stats(user_id, stats["score"], stats["today_plays"], datetime.now().date().isoformat())
     
+    # ==========================================
+    # ЭТАП 1: ОТВЕЧАЕТ ПЕРВЫЙ ИГРОК
+    # ==========================================
     if battle["phase"] == "p1_answer":
         if is_correct:
             battle["p1_correct"] = True
@@ -982,25 +987,31 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_battles[battle_id] = battle
         await ask_battle_question(battle_id, context, query.message.chat_id)
     
+    # ==========================================
+    # ЭТАП 2: ОТВЕЧАЕТ ВТОРОЙ ИГРОК
+    # ==========================================
     elif battle["phase"] == "p2_answer":
         try:
             await query.edit_message_reply_markup(reply_markup=None)
         except BadRequest:
             pass
 
+        # Передаем текущие (уже обновленные) баллы в функцию завершения, чтобы она не читала старые из БД
+        p1_stats_now = get_user_stats(battle["p1_id"])
+        p2_stats_now = get_user_stats(battle["p2_id"])
+
         if is_correct:
             if battle.get("p1_correct"):
-                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_correct")
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_correct", p1_score=p1_stats_now["score"], p2_score=p2_stats_now["score"])
             else:
-                await end_battle(battle_id, query.message.chat_id, context, winner="p2")
+                await end_battle(battle_id, query.message.chat_id, context, winner="p2", p1_score=p1_stats_now["score"], p2_score=p2_stats_now["score"])
         else:
             if battle.get("p1_correct"):
-                await end_battle(battle_id, query.message.chat_id, context, winner="p1")
+                await end_battle(battle_id, query.message.chat_id, context, winner="p1", p1_score=p1_stats_now["score"], p2_score=p2_stats_now["score"])
             else:
-                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_wrong")
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_wrong", p1_score=p1_stats_now["score"], p2_score=p2_stats_now["score"])
 
-
-async def end_battle(battle_id, chat_id, context, winner, reason=""):
+async def end_battle(battle_id, chat_id, context, winner, reason="", p1_score=0, p2_score=0):
     battle = active_battles.get(battle_id)
     if not battle:
         return
@@ -1011,41 +1022,38 @@ async def end_battle(battle_id, chat_id, context, winner, reason=""):
     p2_id = battle["p2_id"]
     
     result_text = ""
-    w_id = None
-    l_id = None
     
     if winner == "p1":
         result_text = f"🏆 Победил *{p1_name}*!\n\n"
-        w_id, l_id = p1_id, p2_id
+        final_p1_score = p1_score + 3
+        final_p2_score = max(0, p2_score - 1)
     elif winner == "p2":
         result_text = f"🏆 Победил *{p2_name}*!\n\n"
-        w_id, l_id = p2_id, p1_id
+        final_p1_score = max(0, p1_score - 1)
+        final_p2_score = p2_score + 3
     else:
         if reason == "both_correct":
-            result_text = "🤝 Ничья! Оба ответили правильно.\n\n"
-            for pid in [p1_id, p2_id]:
-                # БЕРЕМ АКТУАЛЬНЫЙ БАЛАНС ИЗ БАЗЫ
-                stats = get_user_stats(pid)
-                update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
-            result_text += "🎁 Оба получают по +1 бонусному баллу."
+            result_text = "🤝 Ничья! Оба ответили правильно.\n\n🎁 Оба получают по +1 бонусному баллу."
+            final_p1_score = p1_score + 1
+            final_p2_score = p2_score + 1
         else:
             result_text = "🤝 Ничья! Оба ошиблись.\n\n🎁 Никто не получает бонусных баллов."
+            final_p1_score = p1_score
+            final_p2_score = p2_score
     
-    if w_id:
-        # 1. Начисляем +3 ПОБЕДИТЕЛЮ (берем актуальный баланс)
-        w_stats = get_user_stats(w_id)
-        new_w_score = w_stats["score"] + 3
-        update_user_stats(w_id, new_w_score, w_stats["today_plays"], datetime.now().date().isoformat())
+    # Записываем финальные баллы (уже с учетом +3 / +1 / -1)
+    if winner in ["p1", "p2"] or (winner == "draw" and reason == "both_correct"):
+        p1_old = get_user_stats(p1_id)
+        update_user_stats(p1_id, final_p1_score, p1_old["today_plays"], datetime.now().date().isoformat())
         
-        # 2. Снимаем -1 С ПРОИГРАВШЕГО (берем актуальный баланс)
-        l_stats = get_user_stats(l_id)
-        if l_stats["score"] > 0:
-            new_l_score = l_stats["score"] - 1
-            update_user_stats(l_id, new_l_score, l_stats["today_plays"], datetime.now().date().isoformat())
+        p2_old = get_user_stats(p2_id)
+        update_user_stats(p2_id, final_p2_score, p2_old["today_plays"], datetime.now().date().isoformat())
+        
+        if winner == "p1":
             result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n🥈 Проигравший -1 балл"
-        else:
-            result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n(У проигравшего 0 баллов, штраф не снят)"
-    
+        elif winner == "p2":
+            result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n🥈 Проигравший -1 балл"
+
     final_text = f"⚔️ *Дуэль окончена!*\n\n{result_text}"
     
     try:
