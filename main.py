@@ -63,9 +63,11 @@ RANKS = [
 ]
 
 ZERO_SEASON_TOP = [
-    # Сюда вставишь свои данные, например:
-    # {"name": "Алексей", "score": 150},
-    # {"name": "Никита", "score": 120},
+    {"name": "PT | Graff", "score": 591},
+    {"name": "𐌄꤅рꤌꤍꤍꤕ𐌻𑀨", "score": 221},
+    {"name": "tuhtasinov_993", "score": 175},
+    {"name": ".", "score": 164},
+    {"name": "биби", "score": 119}
 ]
 
 # ===== БАЗА ДАННЫХ =====
@@ -2133,6 +2135,7 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(battle_accept, pattern="battle_accept_"))
     app.add_handler(CallbackQueryHandler(battle_answer, pattern="battle_ans_"))
     app.add_handler(CommandHandler("mixquiz", mixquiz))
+    app.add_handler(CommandHandler("zero_season_top", zero_season_top))
 
     print("✅ Бот запущен!")
     app.run_polling()
