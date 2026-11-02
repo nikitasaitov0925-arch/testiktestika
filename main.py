@@ -1024,6 +1024,7 @@ async def end_battle(battle_id, chat_id, context, winner, reason=""):
         if reason == "both_correct":
             result_text = "🤝 Ничья! Оба ответили правильно.\n\n"
             for pid in [p1_id, p2_id]:
+                # БЕРЕМ АКТУАЛЬНЫЙ БАЛАНС ИЗ БАЗЫ
                 stats = get_user_stats(pid)
                 update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
             result_text += "🎁 Оба получают по +1 бонусному баллу."
@@ -1031,12 +1032,16 @@ async def end_battle(battle_id, chat_id, context, winner, reason=""):
             result_text = "🤝 Ничья! Оба ошиблись.\n\n🎁 Никто не получает бонусных баллов."
     
     if w_id:
+        # 1. Начисляем +3 ПОБЕДИТЕЛЮ (берем актуальный баланс)
         w_stats = get_user_stats(w_id)
-        update_user_stats(w_id, w_stats["score"] + 3, w_stats["today_plays"], datetime.now().date().isoformat())
+        new_w_score = w_stats["score"] + 3
+        update_user_stats(w_id, new_w_score, w_stats["today_plays"], datetime.now().date().isoformat())
         
+        # 2. Снимаем -1 С ПРОИГРАВШЕГО (берем актуальный баланс)
         l_stats = get_user_stats(l_id)
         if l_stats["score"] > 0:
-            update_user_stats(l_id, l_stats["score"] - 1, l_stats["today_plays"], datetime.now().date().isoformat())
+            new_l_score = l_stats["score"] - 1
+            update_user_stats(l_id, new_l_score, l_stats["today_plays"], datetime.now().date().isoformat())
             result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n🥈 Проигравший -1 балл"
         else:
             result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n(У проигравшего 0 баллов, штраф не снят)"
