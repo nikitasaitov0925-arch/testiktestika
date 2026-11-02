@@ -762,6 +762,11 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У тебя закончились попытки на сегодня! Возвращайся завтра.")
         return
     
+    # === ПРОВЕРКА БАЛАНСА ВЫЗЫВАЮЩЕГО ===
+    if stats["score"] <= 0:
+        await update.message.reply_text("❌ У тебя 0 баллов на балансе. Дуэль недоступна, пока не заработаешь хотя бы 1 балл.")
+        return
+    
     if not update.message.reply_to_message:
         await update.message.reply_text("❌ Ответь на сообщение друга, чтобы вызвать его на дуэль!")
         return
@@ -772,6 +777,15 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if opponent.is_bot:
         await update.message.reply_text("❌ С ботами не сражаемся.")
+        return
+    
+    # === ПРОВЕРКА БАЛАНСА ОППОНЕНТА ===
+    opponent_stats = get_user_stats(opponent.id)
+    if opponent_stats["score"] <= 0:
+        await update.message.reply_text(
+            f"❌ У *{opponent.first_name}* 0 баллов на балансе. Он не может участвовать в дуэли.", 
+            parse_mode="Markdown"
+        )
         return
     
     battle_id = f"{user_id}_{opponent.id}_{int(time.time())}"
@@ -800,7 +814,6 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
-
 async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -830,15 +843,29 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ У тебя закончились попытки на сегодня!", show_alert=True)
         return
     
+    # === ПРОВЕРКА БАЛАНСА ВТОРОГО ИГРОКА ===
+    if stats2["score"] <= 0:
+        await query.answer("❌ У тебя 0 баллов на балансе. Дуэль недоступна!", show_alert=True)
+        return
+        
+    # === ПРОВЕРКА, ЧТО У ПЕРВОГО НЕ ОБНУЛИЛСЯ БАЛАНС ===
+    stats1 = get_user_stats(battle["p1_id"])
+    if stats1["score"] <= 0:
+        await query.answer("❌ У вызывающего игрока закончились баллы. Дуэль отменена.", show_alert=True)
+        del active_battles[battle_id]
+        return
+    
     # === ТРАТИМ ПОПЫТКУ У ВТОРОГО ===
     update_user_stats(user_id, stats2["score"], stats2["today_plays"] + 1, today)
     
-    # === ТРАТИМ ПОПЫТКУ У ПЕРВОГО (он уже согласился, вызвав на дуэль) ===
-    stats1 = get_user_stats(battle["p1_id"])
+    # === ТРАТИМ ПОПЫТКУ У ПЕРВОГО ===
     update_user_stats(battle["p1_id"], stats1["score"], stats1["today_plays"] + 1, today)
     
-    # Убираем кнопку
-    await query.edit_message_reply_markup(reply_markup=None)
+    # Убираем кнопку "Принять вызов"
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
     
     # Отправляем сообщение о старте
     await context.bot.send_message(
