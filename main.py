@@ -751,7 +751,6 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = update.effective_user.first_name
     today = datetime.now().date().isoformat()
     
-    # Проверяем попытки вызывающего
     stats = get_user_stats(user_id)
     if stats["last_play_date"] != today:
         stats["today_plays"] = 0
@@ -762,9 +761,8 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У тебя закончились попытки на сегодня! Возвращайся завтра.")
         return
     
-    # === ПРОВЕРКА БАЛАНСА ВЫЗЫВАЮЩЕГО ===
     if stats["score"] <= 0:
-        await update.message.reply_text("❌ У тебя 0 баллов на балансе. Дуэль недоступна, пока не заработаешь хотя бы 1 балл.")
+        await update.message.reply_text("❌ У тебя 0 баллов на балансе. Дуэль недоступна.")
         return
     
     if not update.message.reply_to_message:
@@ -779,13 +777,9 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ С ботами не сражаемся.")
         return
     
-    # === ПРОВЕРКА БАЛАНСА ОППОНЕНТА ===
     opponent_stats = get_user_stats(opponent.id)
     if opponent_stats["score"] <= 0:
-        await update.message.reply_text(
-            f"❌ У *{opponent.first_name}* 0 баллов на балансе. Он не может участвовать в дуэли.", 
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text(f"❌ У *{opponent.first_name}* 0 баллов на балансе. Он не может участвовать.", parse_mode="Markdown")
         return
     
     battle_id = f"{user_id}_{opponent.id}_{int(time.time())}"
@@ -795,8 +789,6 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "p1_name": first_name,
         "p2_id": opponent.id,
         "p2_name": opponent.first_name,
-        "score1": 0,
-        "score2": 0,
         "phase": "p1_answer",
         "current_q": None,
         "p1_correct": False
@@ -807,9 +799,9 @@ async def battlequiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"⚔️ *Вызов на дуэль!*\n\n"
-        f"*{first_name}* вызывает *{opponent.first_name}* на интеллектуальную битву.\n"
-        f"Стоимость: 1 попытка викторины у каждого.\n"
-        f"Победа даёт +3 балла!\n\n"
+        f"*{first_name}* вызывает *{opponent.first_name}*.\n"
+        f"Стоимость: 1 попытка у каждого.\n"
+        f"Победа: +3 балла, поражение: -1 балл.\n\n"
         f"*{opponent.first_name}*, принимаешь вызов?",
         parse_mode="Markdown",
         reply_markup=reply_markup
@@ -832,7 +824,6 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("⛔ Это не твой вызов!", show_alert=True)
         return
 
-    # === ПРОВЕРКА ПОПЫТОК У ВТОРОГО ИГРОКА ===
     stats2 = get_user_stats(user_id)
     if stats2["last_play_date"] != today:
         stats2["today_plays"] = 0
@@ -840,34 +831,28 @@ async def battle_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_user_stats(user_id, stats2["score"], 0, today)
         
     if stats2["today_plays"] >= 5:
-        await query.answer("❌ У тебя закончились попытки на сегодня!", show_alert=True)
+        await query.answer("❌ У тебя закончились попытки!", show_alert=True)
         return
     
-    # === ПРОВЕРКА БАЛАНСА ВТОРОГО ИГРОКА ===
     if stats2["score"] <= 0:
-        await query.answer("❌ У тебя 0 баллов на балансе. Дуэль недоступна!", show_alert=True)
+        await query.answer("❌ У тебя 0 баллов. Дуэль недоступна!", show_alert=True)
         return
         
-    # === ПРОВЕРКА, ЧТО У ПЕРВОГО НЕ ОБНУЛИЛСЯ БАЛАНС ===
     stats1 = get_user_stats(battle["p1_id"])
     if stats1["score"] <= 0:
-        await query.answer("❌ У вызывающего игрока закончились баллы. Дуэль отменена.", show_alert=True)
+        await query.answer("❌ У вызывающего 0 баллов. Дуэль отменена.", show_alert=True)
         del active_battles[battle_id]
         return
     
-    # === ТРАТИМ ПОПЫТКУ У ВТОРОГО ===
+    # Тратим попытки
     update_user_stats(user_id, stats2["score"], stats2["today_plays"] + 1, today)
-    
-    # === ТРАТИМ ПОПЫТКУ У ПЕРВОГО ===
     update_user_stats(battle["p1_id"], stats1["score"], stats1["today_plays"] + 1, today)
     
-    # Убираем кнопку "Принять вызов"
     try:
         await query.edit_message_reply_markup(reply_markup=None)
     except Exception:
         pass
     
-    # Отправляем сообщение о старте
     await context.bot.send_message(
         chat_id=query.message.chat_id,
         text=f"⚔️ *Дуэль началась!*\n\n"
@@ -934,11 +919,12 @@ async def ask_battle_question(battle_id, context, chat_id):
 
 from telegram.error import BadRequest
 
+from telegram.error import BadRequest
+
 async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # === ПАРСИНГ ===
     parts = query.data.split("_")
     selected = int(parts[-1])
     battle_id = "_".join(parts[2:-1])
@@ -957,26 +943,36 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not q:
         return
     
-    # Проверяем, кто должен отвечать
     expected_id = battle["p1_id"] if battle["phase"] == "p1_answer" else battle["p2_id"]
     if user_id != expected_id:
         await query.answer("⛔ Сейчас не твой ход!", show_alert=True)
         return
     
     is_correct = (selected == q["correct"])
+    reward = q.get("reward", 1)
     
-    # ==========================================
-    # ЭТАП 1: ОТВЕЧАЕТ ПЕРВЫЙ ИГРОК
-    # ==========================================
+    # === НАЧИСЛЕНИЕ БАЛЛОВ ЗА РЕДКОСТЬ ===
+    stats = get_user_stats(user_id)
+    if is_correct:
+        stats["score"] += reward
+        points_text = f"(+{reward} баллов)"
+    else:
+        if stats["score"] > 0:
+            stats["score"] -= 1
+            points_text = "(-1 балл)"
+        else:
+            points_text = "(0 баллов)"
+            
+    update_user_stats(user_id, stats["score"], stats["today_plays"], datetime.now().date().isoformat())
+    
     if battle["phase"] == "p1_answer":
         if is_correct:
             battle["p1_correct"] = True
-            text = f"✅ *{battle['p1_name']}* ответил правильно!\n\nТеперь очередь *{battle['p2_name']}*."
+            text = f"✅ *{battle['p1_name']}* ответил правильно! {points_text}\n\nТеперь очередь *{battle['p2_name']}*."
         else:
             battle["p1_correct"] = False
-            text = f"❌ *{battle['p1_name']}* ошибся!\nПравильный ответ: *{q['options'][q['correct']]}*\n\nТеперь очередь *{battle['p2_name']}*. Если ответит правильно — победит!"
+            text = f"❌ *{battle['p1_name']}* ошибся! {points_text}\nПравильный ответ: *{q['options'][q['correct']]}*\n\nТеперь очередь *{battle['p2_name']}*."
         
-        # Обновляем сообщение и убираем кнопки
         try:
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
         except BadRequest:
@@ -984,20 +980,14 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         battle["phase"] = "p2_answer"
         active_battles[battle_id] = battle
-        # Задаем вопрос второму игроку НОВЫМ сообщением
         await ask_battle_question(battle_id, context, query.message.chat_id)
     
-    # ==========================================
-    # ЭТАП 2: ОТВЕЧАЕТ ВТОРОЙ ИГРОК
-    # ==========================================
     elif battle["phase"] == "p2_answer":
-        # Сразу убираем кнопки у старого сообщения
         try:
             await query.edit_message_reply_markup(reply_markup=None)
         except BadRequest:
             pass
 
-        # Вызываем завершение дуэли (оно всё посчитает и пришлет результат)
         if is_correct:
             if battle.get("p1_correct"):
                 await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_correct")
@@ -1021,47 +1011,43 @@ async def end_battle(battle_id, chat_id, context, winner, reason=""):
     p2_id = battle["p2_id"]
     
     result_text = ""
+    w_id = None
+    l_id = None
     
     if winner == "p1":
-        result_text = f"🏆 Победил *{p1_name}*!\n\n🎁 Награды:\n🥇 {p1_name} +3 балла"
+        result_text = f"🏆 Победил *{p1_name}*!\n\n"
         w_id, l_id = p1_id, p2_id
     elif winner == "p2":
-        result_text = f"🏆 Победил *{p2_name}*!\n\n🎁 Награды:\n🥇 {p2_name} +3 балла"
+        result_text = f"🏆 Победил *{p2_name}*!\n\n"
         w_id, l_id = p2_id, p1_id
     else:
         if reason == "both_correct":
-            result_text = "🤝 Ничья! Оба ответили правильно и получают по +1 баллу."
+            result_text = "🤝 Ничья! Оба ответили правильно.\n\n"
             for pid in [p1_id, p2_id]:
                 stats = get_user_stats(pid)
                 update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
-            w_id, l_id = None, None
+            result_text += "🎁 Оба получают по +1 бонусному баллу."
         else:
-            result_text = "🤝 Ничья! Оба ошиблись. Никто не получает баллов."
-            w_id, l_id = None, None
+            result_text = "🤝 Ничья! Оба ошиблись.\n\n🎁 Никто не получает бонусных баллов."
     
-    # === НАЧИСЛЕНИЕ БАЛЛОВ ===
     if w_id:
-        # Начисляем победителю
         w_stats = get_user_stats(w_id)
         update_user_stats(w_id, w_stats["score"] + 3, w_stats["today_plays"], datetime.now().date().isoformat())
         
-        # Снимаем с проигравшего
         l_stats = get_user_stats(l_id)
         if l_stats["score"] > 0:
             update_user_stats(l_id, l_stats["score"] - 1, l_stats["today_plays"], datetime.now().date().isoformat())
-            result_text += "\n🥈 Проигравший -1 балл"
+            result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n🥈 Проигравший -1 балл"
         else:
-            result_text += "\n(У проигравшего 0 баллов, штраф не снят)"
+            result_text += f"🎁 Награды:\n🥇 Победитель +3 балла\n(У проигравшего 0 баллов, штраф не снят)"
     
     final_text = f"⚔️ *Дуэль окончена!*\n\n{result_text}"
     
-    # Отправляем итоговое сообщение
     try:
         await context.bot.send_message(chat_id, final_text, parse_mode="Markdown")
     except Exception as e:
-        print(f"Ошибка отправки результата дуэли: {e}")
+        print(f"Ошибка отправки результата: {e}")
         
-    # Удаляем дуэль
     del active_battles[battle_id]
 # ===== СТАТИСТИКА =====
 @antispam_decorator
