@@ -2016,6 +2016,85 @@ def get_rank(score):
             return rank
     return RANKS[0]
 
+import random
+
+@antispam_decorator
+async def mixquiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ Нет прав")
+        return
+    
+    reply = update.message.reply_to_message
+    if not reply or not reply.document:
+        await update.message.reply_text(
+            "❌ Как перемешать редкости:\n\n"
+            "1. Отправь файл базы (quizzes_backup_*.db)\n"
+            "2. Нажми на него → 'Ответить'\n"
+            "3. Напиши /mixquiz\n\n"
+            "📌 Бот вернет файл с перемешанными редкостями."
+        )
+        return
+    
+    document = reply.document
+    if not document.file_name.endswith('.db'):
+        await update.message.reply_text("❌ Файл должен быть в формате .db")
+        return
+    
+    await update.message.reply_text("📥 Загружаю файл и перемешиваю редкости...")
+    
+    try:
+        # Скачиваем файл
+        file = await context.bot.get_file(document.file_id)
+        file_path = f"mix_temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        await file.download_to_drive(file_path)
+        
+        # Подключаемся к базе
+        conn = sqlite3.connect(file_path)
+        c = conn.cursor()
+        
+        # Получаем все ID вопросов
+        c.execute("SELECT id FROM base_quizzes")
+        ids = [row[0] for row in c.fetchall()]
+        
+        if not ids:
+            await update.message.reply_text("❌ В базе нет вопросов.")
+            conn.close()
+            os.remove(file_path)
+            return
+            
+        # Генерируем новые редкости для каждого вопроса
+        rarities = []
+        for _ in ids:
+            roll = random.random()
+            if roll < 0.60: r = "common"
+            elif roll < 0.85: r = "uncommon"
+            elif roll < 0.95: r = "rare"
+            elif roll < 0.99: r = "epic"
+            else: r = "legendary"
+            rarities.append(r)
+            
+        # Обновляем редкости в базе
+        for quiz_id, new_rarity in zip(ids, rarities):
+            c.execute("UPDATE base_quizzes SET rarity = ? WHERE id = ?", (new_rarity, quiz_id))
+            
+        conn.commit()
+        conn.close()
+        
+        # Отправляем файл обратно
+        with open(file_path, 'rb') as f:
+            await update.message.reply_document(
+                document=f,
+                filename=f"quizzes_mixed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
+                caption="✅ Редкости вопросов успешно перемешаны!\n\nТеперь можешь загрузить этот файл через /restore_quizzes."
+            )
+            
+        os.remove(file_path)
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
     init_user_db()
@@ -2053,6 +2132,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("battlequiz", battlequiz))
     app.add_handler(CallbackQueryHandler(battle_accept, pattern="battle_accept_"))
     app.add_handler(CallbackQueryHandler(battle_answer, pattern="battle_ans_"))
+    app.add_handler(CommandHandler("mixquiz", mixquiz))
 
     print("✅ Бот запущен!")
     app.run_polling()
