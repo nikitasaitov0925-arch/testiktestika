@@ -932,34 +932,23 @@ async def battle_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ЭТАП 2: ОТВЕЧАЕТ ВТОРОЙ ИГРОК
     # ==========================================
     elif battle["phase"] == "p2_answer":
-        # 1. Формируем текст результата
-        if is_correct:
-            if battle.get("p1_correct"):
-                text = f"✅ *{battle['p2_name']}* тоже ответил правильно!\n\n🤝 *Ничья!* Оба оказались на высоте."
-                winner = "draw"
-                reason = "both_correct"
-            else:
-                text = f"✅ *{battle['p2_name']}* ответил правильно!\n🏆 Победа присуждается *{battle['p2_name']}*!"
-                winner = "p2"
-                reason = ""
-        else:
-            if battle.get("p1_correct"):
-                text = f"❌ *{battle['p2_name']}* ошибся!\nПравильный ответ: *{q['options'][q['correct']]}*\n🏆 Победа присуждается *{battle['p1_name']}*!"
-                winner = "p1"
-                reason = ""
-            else:
-                text = f"❌ *{battle['p2_name']}* тоже ошибся!\nПравильный ответ: *{q['options'][q['correct']]}*\n🤝 *Ничья!* Оба ошиблись."
-                winner = "draw"
-                reason = "both_wrong"
-
-        # 2. Редактируем СООБЩЕНИЕ С КНОПКАМИ (убираем кнопки и пишем результат)
+        # Сразу убираем кнопки у старого сообщения
         try:
-            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=None)
+            await query.edit_message_reply_markup(reply_markup=None)
         except BadRequest:
             pass
-            
-        # 3. Вызываем завершение дуэли (передаем already_edited=True, чтобы он не шлал новое сообщение, а только начислил баллы)
-        await end_battle(battle_id, query.message.chat_id, context, winner=winner, reason=reason, already_edited=True)
+
+        # Вызываем завершение дуэли (оно всё посчитает и пришлет результат)
+        if is_correct:
+            if battle.get("p1_correct"):
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_correct")
+            else:
+                await end_battle(battle_id, query.message.chat_id, context, winner="p2")
+        else:
+            if battle.get("p1_correct"):
+                await end_battle(battle_id, query.message.chat_id, context, winner="p1")
+            else:
+                await end_battle(battle_id, query.message.chat_id, context, winner="draw", reason="both_wrong")
 
 
 async def end_battle(battle_id, chat_id, context, winner, reason=""):
@@ -975,39 +964,45 @@ async def end_battle(battle_id, chat_id, context, winner, reason=""):
     result_text = ""
     
     if winner == "p1":
-        result_text = f"🏆 Победил *{p1_name}*!"
+        result_text = f"🏆 Победил *{p1_name}*!\n\n🎁 Награды:\n🥇 {p1_name} +3 балла"
         w_id, l_id = p1_id, p2_id
     elif winner == "p2":
-        result_text = f"🏆 Победил *{p2_name}*!"
+        result_text = f"🏆 Победил *{p2_name}*!\n\n🎁 Награды:\n🥇 {p2_name} +3 балла"
         w_id, l_id = p2_id, p1_id
     else:
-        # === ЛОГИКА ДЛЯ НИЧЬЕЙ ===
         if reason == "both_correct":
-            result_text = "🤝 Ничья! Оба ответили правильно и получают по +1 баллу за старание."
+            result_text = "🤝 Ничья! Оба ответили правильно и получают по +1 баллу."
             for pid in [p1_id, p2_id]:
                 stats = get_user_stats(pid)
                 update_user_stats(pid, stats["score"] + 1, stats["today_plays"], datetime.now().date().isoformat())
+            w_id, l_id = None, None
         else:
-            result_text = "🤝 Ничья! Оба ошиблись. Никто не получает баллов и не теряет их."
+            result_text = "🤝 Ничья! Оба ошиблись. Никто не получает баллов."
+            w_id, l_id = None, None
     
-    final_text = f"⚔️ *Дуэль окончена!*\n\n{result_text}\n"
-    
+    # === НАЧИСЛЕНИЕ БАЛЛОВ ===
     if w_id:
+        # Начисляем победителю
         w_stats = get_user_stats(w_id)
         update_user_stats(w_id, w_stats["score"] + 3, w_stats["today_plays"], datetime.now().date().isoformat())
         
+        # Снимаем с проигравшего
         l_stats = get_user_stats(l_id)
         if l_stats["score"] > 0:
             update_user_stats(l_id, l_stats["score"] - 1, l_stats["today_plays"], datetime.now().date().isoformat())
-            final_text += f"\n🎁 Награды:\n🥇 Победитель +3 балла\n🥈 Проигравший -1 балл\n"
+            result_text += "\n🥈 Проигравший -1 балл"
         else:
-            final_text += f"\n🎁 Награды:\n🥇 Победитель +3 балла\n(У проигравшего 0 баллов, штраф не снят)\n"
+            result_text += "\n(У проигравшего 0 баллов, штраф не снят)"
     
+    final_text = f"⚔️ *Дуэль окончена!*\n\n{result_text}"
+    
+    # Отправляем итоговое сообщение
     try:
         await context.bot.send_message(chat_id, final_text, parse_mode="Markdown")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Ошибка отправки результата дуэли: {e}")
         
+    # Удаляем дуэль
     del active_battles[battle_id]
 # ===== СТАТИСТИКА =====
 @antispam_decorator
