@@ -2016,7 +2016,7 @@ async def rplist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(message, parse_mode="Markdown", reply_markup=reply_markup)
 
 @antispam_decorator
-async def zero_season_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def zero_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not ZERO_SEASON_TOP:
         await update.message.reply_text("📭 Топ нулевого сезона пока пуст.")
         return
@@ -2169,7 +2169,7 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(battle_accept, pattern="battle_accept_"))
     app.add_handler(CallbackQueryHandler(battle_answer, pattern="battle_ans_"))
     app.add_handler(CommandHandler("mixquiz", mixquiz))
-    app.add_handler(CommandHandler("zero_season_top", zero_season_top))
+    app.add_handler(CommandHandler("zero_top", zero_season_top))
 
     print("✅ Бот запущен!")
     app.run_polling()
