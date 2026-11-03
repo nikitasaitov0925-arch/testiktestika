@@ -20,6 +20,7 @@ ADMIN_ID = 5206039766
 MEMES_FILE = "memes.json"
 BASE_QUIZZES_DB = "/app/data/base_qu1zzes.db"
 USERS_DB = "/app/data/qu1z_users.db"
+CHANNEL_USERNAME = "@trassa993"
 
 active_rebuses = {}
 active_battles = {}
@@ -289,22 +290,40 @@ def check_antispam(user_id):
     antispam[user_id] = user
     return True, ""
 
+# Сам декоратор
 def antispam_decorator(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
 
+        # Очищаем активный ребус при любой команде (включая /rebus)
         if update.message and update.message.text and update.message.text.startswith('/'):
             if user_id in active_rebuses:
                 del active_rebuses[user_id]
 
+        # === ПРОВЕРКА ПОДПИСКИ ===
+        # Исключение для команды /start и /help
+        if update.message and update.message.text:
+            cmd = update.message.text.split()[0].split('@')[0]
+            if cmd in ['/start', '/help']:
+                pass # Пропускаем проверку для этих команд
+            else:
+                if not await is_subscribed(update, context):
+                    await update.message.reply_text(
+                        f"⛔ Для использования бота нужно подписаться на канал: {CHANNEL_USERNAME}\n\n"
+                        f"После подписки напиши /start заново.",
+                        disable_web_page_preview=True
+                    )
+                    return
+
+        # === АНТИСПАМ ===
         allowed, msg = check_antispam(user_id)
         if not allowed:
             if msg:
                 await update.message.reply_text(msg, parse_mode="Markdown")
             return
+        
         return await func(update, context)
     return wrapper
-
 # ===== RP-СИСТЕМА =====
 RP_TRIGGERS = {
     "чай джейса": {
@@ -2096,6 +2115,21 @@ async def mixquiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка: {e}")
         if os.path.exists(file_path):
             os.remove(file_path)
+
+
+# Функция проверки подписки
+async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id
+    try:
+        member = await context.bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        if member.status in ["left", "kicked"]:
+            return False
+        return True
+    except Exception as e:
+        print(f"Ошибка проверки подписки: {e}")
+        return False
+
+
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
